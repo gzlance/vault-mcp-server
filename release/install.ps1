@@ -5,11 +5,14 @@
 param(
     [string]$InstallDir = "$env:USERPROFILE\scripts\vault-mcp-server",
     [string]$SkillDir = "$env:USERPROFILE\.claude\skills\kb",
-    [string]$McpConfig = "$env:USERPROFILE\.claude\mcp.json",
+    [string]$McpConfig = "$env:USERPROFILE\.claude.json",
     [switch]$SkipTests = $false
 )
 
 $ErrorActionPreference = "Stop"
+# UTF-8 编码支持（中文输出不乱码）
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SourceDir = Join-Path $ScriptDir "vault-mcp-server"
 
@@ -55,6 +58,8 @@ Copy-Item -Force "$SourceDir\db.py" $InstallDir
 Copy-Item -Force "$SourceDir\requirements.txt" $InstallDir
 Copy-Item -Force "$SourceDir\README.md" $InstallDir
 Copy-Item -Force "$SourceDir\INSTALL.md" $InstallDir
+Copy-Item -Force "$SourceDir\SKILL.md" $InstallDir
+
 Copy-Item -Force "$SourceDir\tools\*.py" "$InstallDir\tools\"
 Copy-Item -Force "$SourceDir\tests\*.py" "$InstallDir\tests\"
 
@@ -78,12 +83,12 @@ if (-not (Test-Path $mcpDir)) {
     New-Item -ItemType Directory -Force -Path $mcpDir | Out-Null
 }
 
-# 读取或创建 mcp.json
+# 读取或创建 ~/.claude.json
 if (Test-Path $McpConfig) {
     try {
         $mcp = Get-Content $McpConfig -Raw -Encoding UTF8 | ConvertFrom-Json
     } catch {
-        Write-Host "  警告: mcp.json 解析失败，将创建新配置" -ForegroundColor DarkYellow
+        Write-Host "  警告: .claude.json 解析失败，将创建新配置" -ForegroundColor DarkYellow
         $mcp = [PSCustomObject]@{ mcpServers = [PSCustomObject]@{} }
     }
 } else {
@@ -113,49 +118,7 @@ if (-not (Test-Path $SkillDir)) {
     New-Item -ItemType Directory -Force -Path $SkillDir | Out-Null
 }
 
-$skillContent = @'
----
-name: kb
-description: Vault 知识库快捷命令 — /kb init|save|search|resume|list|stats|orphan|update|tags|log|graphify
----
-
-# /kb — Vault 知识库命令路由
-
-提供自然语言触发知识库工具的命令别名。
-
-## 命令列表
-
-| 命令 | 触发方式 |
-|------|---------|
-| `/kb init` | "初始化知识库"、"vault init" |
-| `/kb save` | "保存到知识库"、"记住这个" |
-| `/kb search <词>` | "搜索知识库 xxx" |
-| `/kb resume <项目>` | "恢复 xxx 上下文" |
-| `/kb stats` | "知识库统计" |
-| `/kb list` | "列出笔记" |
-| `/kb orphan` | "找孤立笔记" |
-| `/kb tags` | "标签列表" |
-| `/kb log` | "写工作日志" |
-| `/kb update` | "更新笔记" |
-| `/kb graphify build` | "构建代码图谱" |
-| `/kb graphify status` | "图谱状态" |
-| `/kb graphify query <符号>` | "搜索符号 xxx" |
-
-## 自动行为
-
-- 修改代码时自动检查图谱是否过期
-- 遇到错误时自动搜索知识库
-- 解决问题后提示保存
-- 会话结束时自动写日志
-
-## 三层代码查询策略
-
-修改代码前，按优先级查：
-1. `graphify_query` — 符号归属和调用链 (< 10ms)
-2. `vault_search` — graphify/ 和 permanent/ 中的知识
-3. 直接 Read 源文件 — 仅当前两层信息不足时
-'@
-Set-Content -Path "$SkillDir\SKILL.md" -Value $skillContent -Encoding UTF8
+Copy-Item -Force "$InstallDir\SKILL.md" "$SkillDir\SKILL.md"
 Write-Host "  Skill 已安装到 $SkillDir\SKILL.md" -ForegroundColor Green
 
 # ── 步骤 6: 验证 ──

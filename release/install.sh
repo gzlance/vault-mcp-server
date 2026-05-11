@@ -6,7 +6,7 @@ set -euo pipefail
 
 INSTALL_DIR="${HOME}/scripts/vault-mcp-server"
 SKILL_DIR="${HOME}/.claude/skills/kb"
-MCP_CONFIG="${HOME}/.claude/mcp.json"
+MCP_CONFIG="${HOME}/.claude.json"
 SKIP_TESTS=false
 
 # ── 解析参数 ──
@@ -22,7 +22,7 @@ while [[ $# -gt 0 ]]; do
             echo "选项:"
             echo "  --install-dir DIR   安装目录 (默认: ~/scripts/vault-mcp-server)"
             echo "  --skill-dir DIR     Skill 目录 (默认: ~/.claude/skills/kb)"
-            echo "  --mcp-config FILE   MCP 配置文件 (默认: ~/.claude/mcp.json)"
+            echo "  --mcp-config FILE   MCP 配置文件 (默认: ~/.claude.json)"
             echo "  --skip-tests        跳过测试"
             echo "  --help              显示帮助"
             exit 0
@@ -85,6 +85,8 @@ cp "$SOURCE_DIR/db.py" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/README.md" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/INSTALL.md" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/SKILL.md" "$INSTALL_DIR/"
+
 cp "$SOURCE_DIR/tools/"*.py "$INSTALL_DIR/tools/"
 cp "$SOURCE_DIR/tests/"*.py "$INSTALL_DIR/tests/"
 
@@ -104,7 +106,7 @@ echo -e "${YELLOW}[4/6] 配置 MCP ($MCP_CONFIG) ...${NC}"
 MCP_DIR="$(dirname "$MCP_CONFIG")"
 mkdir -p "$MCP_DIR"
 
-# 读取或创建 mcp.json（使用 Python 处理 JSON 避免 jq 依赖）
+# 读取或创建 ~/.claude.json（使用 Python 处理 JSON 避免 jq 依赖）
 "$PYTHON_CMD" -c "
 import json, os, sys
 
@@ -120,7 +122,7 @@ if os.path.exists(mcp_path):
         with open(mcp_path, 'r') as f:
             mcp = json.load(f)
     except json.JSONDecodeError:
-        print('  警告: mcp.json 解析失败，创建新配置')
+        print('  警告: .claude.json 解析失败，创建新配置')
         mcp = {}
 else:
     mcp = {}
@@ -141,49 +143,7 @@ echo -e "${GREEN}  MCP 配置完成${NC}"
 echo -e "${YELLOW}[5/6] 安装 /kb Skill...${NC}"
 
 mkdir -p "$SKILL_DIR"
-cat > "$SKILL_DIR/SKILL.md" << 'SKILLEOF'
----
-name: kb
-description: Vault 知识库快捷命令 — /kb init|save|search|resume|list|stats|orphan|update|tags|log|graphify
----
-
-# /kb — Vault 知识库命令路由
-
-提供自然语言触发知识库工具的命令别名。
-
-## 命令列表
-
-| 命令 | 触发方式 |
-|------|---------|
-| `/kb init` | "初始化知识库"、"vault init" |
-| `/kb save` | "保存到知识库"、"记住这个" |
-| `/kb search <词>` | "搜索知识库 xxx" |
-| `/kb resume <项目>` | "恢复 xxx 上下文" |
-| `/kb stats` | "知识库统计" |
-| `/kb list` | "列出笔记" |
-| `/kb orphan` | "找孤立笔记" |
-| `/kb tags` | "标签列表" |
-| `/kb log` | "写工作日志" |
-| `/kb update` | "更新笔记" |
-| `/kb graphify build` | "构建代码图谱" |
-| `/kb graphify status` | "图谱状态" |
-| `/kb graphify query <符号>` | "搜索符号 xxx" |
-
-## 自动行为
-
-- 修改代码时自动检查图谱是否过期
-- 遇到错误时自动搜索知识库
-- 解决问题后提示保存
-- 会话结束时自动写日志
-
-## 三层代码查询策略
-
-修改代码前，按优先级查：
-1. `graphify_query` — 符号归属和调用链 (< 10ms)
-2. `vault_search` — graphify/ 和 permanent/ 中的知识
-3. 直接 Read 源文件 — 仅当前两层信息不足时
-SKILLEOF
-
+cp "$INSTALL_DIR/SKILL.md" "$SKILL_DIR/SKILL.md"
 echo -e "${GREEN}  Skill 已安装到 $SKILL_DIR/SKILL.md${NC}"
 
 # ── 步骤 6: 验证 ──
