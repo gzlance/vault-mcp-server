@@ -1,0 +1,35 @@
+# graphify 排除配置（与 .gitignore 语法一致）
+# 只保留核心源码：server.py + db.py + tools/
+
+# 测试
+tests/
+
+# 发布包（源码副本）
+release/
+
+# 文档
+docs/
+CLAUDE.md
+README.md
+INSTALL.md
+SKILL.md
+
+# Python 缓存
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+
+# 临时文件
+_*.py
+test_*.txt
+.coverage
+coverage.json
+
+# VCS / 工具
+.git/
+.claude/
+
+# graphify 自身输出（已默认忽略，显式声明无害）
+graphify-out/
+.vault.db

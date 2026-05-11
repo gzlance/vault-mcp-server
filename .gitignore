@@ -6,3 +6,4 @@ graphify-out/
 *.pyc
 *.pyo
 .vault.db
+.claude/
