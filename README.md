@@ -2,7 +2,7 @@
 
 个人知识库 + 代码图谱统一 MCP 服务。
 
-**最后更新:** 2026-05-10
+**最后更新:** 2026-05-11
 **Python:** 3.10+
 **协议:** MCP stdio
 
@@ -47,12 +47,12 @@ pip install graphifyy
 ### 2. 启动 MCP Server（手动验证）
 
 ```bash
-PYTHONIOENCODING=utf-8 python C:/Users/Gzlance/scripts/vault-mcp-server/server.py
+PYTHONIOENCODING=utf-8 python ~/scripts/vault-mcp-server/server.py
 ```
 
 ### 3. 注册到 Claude Code
 
-编辑 `~/.claude/mcp.json`：
+编辑 `~/.claude.json`，在 `mcpServers` 中添加：
 
 ```json
 {
@@ -60,9 +60,8 @@ PYTHONIOENCODING=utf-8 python C:/Users/Gzlance/scripts/vault-mcp-server/server.p
     "vault": {
       "command": "python",
       "args": [
-        "C:/Users/Gzlance/scripts/vault-mcp-server/server.py"
+        "~/scripts/vault-mcp-server/server.py"
       ],
-      "type": "stdio",
       "env": {
         "PYTHONIOENCODING": "utf-8"
       }
@@ -71,11 +70,20 @@ PYTHONIOENCODING=utf-8 python C:/Users/Gzlance/scripts/vault-mcp-server/server.p
 }
 ```
 
-注册后可用 MCP 命令验证：
+或者一键安装：
+
+```bash
+# Windows
+powershell -ExecutionPolicy Bypass -File release/install.ps1
+
+# Linux/macOS
+bash release/install.sh
+```
+
+验证注册：
 
 ```bash
 claude mcp list
-claude mcp add vault -- python C:/Users/Gzlance/scripts/vault-mcp-server/server.py
 ```
 
 ### 4. 初始化知识库
@@ -229,7 +237,7 @@ Claude 用自然语言总结：
 |   ├── _shared.py             # 公共工具: 输入校验、JSON 回复、路径处理
 |   ├── vault_tools.py         # 10 个核心 + 管理工具实现
 |   └── graphify_tools.py      # 3 个代码图谱工具实现
-└── tests/                     # 单元测试
+└── tests/                     # 单元/集成/E2E 测试（133+）
 ```
 
 ### Vault 知识库
@@ -258,8 +266,9 @@ Claude 用自然语言总结：
 ```
 ~/.claude/
 ├── skills/
-|   └── kb.md                  # /kb 路由指令（薄 Skill，~40 行）
-└── mcp.json                   # MCP Server 注册配置
+│   └── kb/
+│       └── SKILL.md            # /kb 路由指令
+└── .claude.json                # 用户级配置（含 MCP servers）
 ```
 
 ---
@@ -319,12 +328,13 @@ python C:/Users/Gzlance/scripts/vault-mcp-server/server.py
 
 ### Vault 目录在哪里
 
-默认 `~/vault/`，即 `C:\Users\<你的用户名>\vault\`。可在每次调用时通过 `vault_dir` 参数覆盖，或在 `~/.claude/mcp.json` 中通过环境变量 `VAULT_DIR` 指定。
+默认 `~/vault/`，即 `C:\Users\<你的用户名>\vault\`。可在每次调用时通过 `vault_dir` 参数覆盖，或设置环境变量 `VAULT_DIR` 指定。
 
 ---
 
 ## 相关文档
 
-- PRD 与完整规格: `D:\MyWord\claudeTest\docs\prd-knowledge-base.md`
-- 路由 Skill: `~/.claude/skills/kb.md`
+- PRD 与完整规格: `docs/prd-knowledge-base.md`
+- 使用手册: `docs/USER_GUIDE.md`
+- 路由 Skill: `~/.claude/skills/kb/SKILL.md`
 - Obsidian Vault 社区方案: [wangjun.dev](https://www.wangjun.dev/2026/05/claude-code-memory-setup/)
