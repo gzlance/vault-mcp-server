@@ -64,7 +64,7 @@ async def handle_graphify_build(args: dict) -> list[TextContent]:
         env.setdefault("PYTHONIOENCODING", "utf-8")
 
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120,
+            cmd, capture_output=True, text=True, timeout=300,
             cwd=str(project_path), env=env,
         )
 
@@ -113,7 +113,10 @@ async def handle_graphify_build(args: dict) -> list[TextContent]:
         })
 
     except subprocess.TimeoutExpired:
-        return json_reply({"status": "error", "message": "graphify 构建超时（120s）"})
+        return json_reply({
+            "status": "error",
+            "message": "graphify 构建超时（300s）。对于大型项目，建议直接在终端运行: graphify update <project_dir>",
+        })
     except FileNotFoundError:
         return json_reply({
             "status": "error",

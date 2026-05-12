@@ -17,19 +17,41 @@
 
 ### 1.2 安装与注册
 
+**方式 1：一键安装脚本（推荐）**
+
 ```bash
-# 安装依赖
-cd D:/MyWord/vault-mcp-server
-pip install -r requirements.txt
+# Windows
+powershell -ExecutionPolicy Bypass -File release/install.ps1
 
-# 注册到 Claude Code
-claude mcp add vault -- python D:/MyWord/vault-mcp-server/server.py
-
-# 验证
-claude mcp list
+# Linux/macOS
+bash release/install.sh
 ```
 
-> **Windows 用户:** MCP 配置中必须设置 `PYTHONIOENCODING=utf-8`，否则中文乱码。
+脚本自动完成：文件复制、pip 依赖安装、MCP 配置写入 `~/.claude.json`、`/kb` Skill 安装。
+
+**方式 2：手动安装**
+
+```bash
+# 1. 安装依赖
+pip install mcp>=1.0.0
+
+# 2. 编辑 ~/.claude.json，在 mcpServers 中添加：
+# {
+#   "mcpServers": {
+#     "vault": {
+#       "command": "python",
+#       "args": ["~/scripts/vault-mcp-server/server.py"],
+#       "env": { "PYTHONIOENCODING": "utf-8" }
+#     }
+#   }
+# }
+```
+
+**验证注册：**
+
+在 Claude Code 中输入 `/kb stats`，返回统计面板即注册成功。也可用 `claude mcp list` 查看 MCP 服务列表。
+
+> **Windows 用户:** MCP 配置中必须设置 `PYTHONIOENCODING=utf-8`，否则中文乱码。PyPI 包名为 `mcp`（非 `mcp-server`）。
 
 ### 1.3 首次初始化
 
@@ -84,7 +106,7 @@ claude mcp list
 ---
 
 #### /kb learn
-**功能:** 学习记录，默认 type: concept，status: draft。  
+**功能:** 学习记录，实际调用 `vault_save`，默认 type: concept，status: draft。  
 **参数:** 同 `/kb save`
 
 > 用户: /kb learn Docker 多阶段构建可以大幅减小镜像体积，原理是...  
@@ -249,7 +271,7 @@ Git push 报 Permission denied...       # 排查问题
 ## 5. 常见问题
 
 ### Q: Vault 放哪里？
-默认 `~/vault/`（Windows 即 `C:\Users\<用户名>\vault\`）。可通过 `--vault-dir` 或环境变量 `VAULT_DIR` 自定义。
+默认 `~/vault/`（Windows 即 `C:\Users\<用户名>\vault\`）。可通过 MCP 工具参数 `vault_dir` 或环境变量 `VAULT_DIR` 自定义。
 
 ### Q: graphify 未安装怎么办？
 graphify 是可选依赖，不影响核心功能。未安装时 `/kb graphify` 提示 `pip install graphifyy`。
@@ -280,7 +302,8 @@ cp -r ~/vault D:/Backup/vault-$(date +%Y%m%d)                # 定时拷贝
 ```bash
 python --version      # 确认 3.10+
 pip show mcp          # 确认已安装
-PYTHONIOENCODING=utf-8 python D:/MyWord/vault-mcp-server/server.py  # 手动测试
+# 手动启动 MCP Server（无报错退出即正常）
+PYTHONIOENCODING=utf-8 python ~/scripts/vault-mcp-server/server.py
 claude mcp list       # 验证注册
 ```
 
