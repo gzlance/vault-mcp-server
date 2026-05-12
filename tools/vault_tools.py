@@ -76,6 +76,20 @@ def _to_kebab(title: str) -> str:
     return name.strip("-")
 
 
+# 笔记类型到项目子目录的映射
+_TYPE_TO_SUBDIR: dict[str, str] = {
+    "permanent": "architecture",
+    "concept": "architecture",
+    "solution": "features",
+    "tool": "data",
+}
+
+
+def _type_to_subdir(note_type: str) -> str:
+    """返回笔记类型对应的项目子目录，未知类型默认放根目录。"""
+    return _TYPE_TO_SUBDIR.get(note_type, "")
+
+
 def _resolve_file_path(
     vault_dir: Path, title: str, note_type: str, project: str | None = None
 ) -> Path:
@@ -90,7 +104,9 @@ def _resolve_file_path(
     elif note_type == "code-graph":
         return vault_dir / "graphify" / (project or "") / filename
     elif project:
-        return vault_dir / project / filename
+        # 按笔记类型路由到项目子目录
+        subdir = _type_to_subdir(note_type)
+        return vault_dir / project / subdir / filename
     else:
         return vault_dir / "permanent" / filename
 

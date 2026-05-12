@@ -174,7 +174,7 @@ class TestE2EFullFlow(unittest.TestCase):
         data = _parse(result)
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["action"], "created")
-        self.assertEqual(data["file_path"], "backend-tools/go-concurrency.md")
+        self.assertEqual(data["file_path"], "backend-tools/architecture/go-concurrency.md")
         self.assertGreaterEqual(data["wikilinks_auto_suggested"], 1)
 
     def test_step04_save_solution_note(self):
@@ -188,7 +188,7 @@ class TestE2EFullFlow(unittest.TestCase):
         data = _parse(result)
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["action"], "created")
-        self.assertEqual(data["file_path"], "backend-tools/db-connection-pool.md")
+        self.assertEqual(data["file_path"], "backend-tools/features/db-connection-pool.md")
 
     # ── 步骤 5: vault_search ──
 
