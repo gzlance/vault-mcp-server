@@ -1,0 +1,120 @@
+[project]
+name = "vault-mcp-server"
+version = "1.0.2"
+description = "个人知识库 + 代码图谱统一 MCP 服务"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+]
+optional-dependencies = { graphify = ["graphifyy"] }
+
+[project.scripts]
+vault-mcp-server = "server:main"
+
+# ── 开发依赖（非发布）──
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=6",
+    "black>=24",
+    "isort>=5",
+    "ruff>=0.8",
+    "mypy>=1",
+    "bandit>=1.7",
+]
+
+# ═══════════════════════════════════════════════════
+# 工具配置
+# ═══════════════════════════════════════════════════
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+exclude = '''
+/(
+    \.git
+  | \.pytest_cache
+  | graphify-out
+  | release
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip = [".git", ".pytest_cache", "graphify-out", "release", "__pycache__"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [".git", ".pytest_cache", "graphify-out", "release"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "N818",   # 异常类名不以 "Error" 结尾
+    "B008",   # 函数参数默认值中调用函数
+    "RUF001", # 字符串中的全角标点（中文注释和描述合法使用）
+    "RUF002", # docstring 中的全角标点（中文 docstring 合法使用）
+    "RUF003", # 注释中的全角标点（中文注释合法使用）
+    "RUF005", # list 拼接风格偏好，不影响正确性
+    "SIM108", # 三元表达式未必比 if-else 更可读
+    "A002",   # db.py 参数名 type 是业务语义，非 Python 内置遮蔽
+]
+
+[tool.ruff.lint.per-file-ignores]
+"server.py" = ["E501"]  # MCP 工具 description 字符串不易断行
+"db.py" = ["E501"]      # SQL DDL 字符串和初始化注释不易断行
+"tools/vault_tools.py" = ["E501"]  # wikilink 正则和长消息不易断行
+"tools/graphify_tools.py" = ["E501"]  # 子进程命令构建和错误消息不易断行
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+disallow_untyped_defs = false
+warn_return_any = true
+warn_unused_ignores = true
+exclude = ["tests/", "release/", "graphify-out/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --tb=short"
+markers = [
+    "unit: 单元测试",
+    "integration: 集成测试",
+    "e2e: 端到端测试",
+]
+
+[tool.coverage.run]
+source = ["server", "db", "tools"]
+omit = ["tests/*", "release/*"]
+
+[tool.coverage.report]
+fail_under = 80
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "def main",
+    "raise NotImplementedError",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "release", "graphify-out"]
+skips = ["B101"]  # assert 在测试和 MCP handler 中有合法用途

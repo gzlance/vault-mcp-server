@@ -7,11 +7,12 @@ release/
 ├── vault-mcp-server/       # 源码
 │   ├── server.py           # MCP 服务入口
 │   ├── db.py               # SQLite 数据库层
+│   ├── pyproject.toml      # 工具配置（black/isort/ruff/mypy/pytest/bandit）
 │   ├── requirements.txt    # Python 依赖
 │   ├── README.md           # 使用手册
 │   ├── INSTALL.md          # 详细安装指南
 │   ├── tools/              # MCP 工具实现
-│   └── tests/              # 测试套件 (211 个测试)
+│   └── tests/              # 测试套件 (228 个测试)
 ├── install.sh              # Linux/macOS 全自动安装
 └── install.ps1             # Windows 全自动安装
 ```
@@ -44,4 +45,4 @@ bash install.sh --install-dir /opt/vault-mcp --skip-tests
 
 ## 版本
 
-v1.27.1 — 2026-05-10
+v1.0.2 — 2026-05-12
