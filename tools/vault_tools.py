@@ -337,7 +337,17 @@ async def handle_save(args: dict) -> list[TextContent]:
     is_update = file_path.exists()
 
     with VaultDB() as db:
-        # 1.5 文件名冲突检测：如果同名文件已存在但属于不同笔记，追加数字后缀
+        # 1.5 回退匹配：新路径不存在时，按标题查找旧路径（兼容路由规则变更前的笔记）
+        if not is_update:
+            old_note = db.get_note_by_title(title)
+            if old_note:
+                old_path = vault_dir / old_note["file_path"]
+                if old_path.exists():
+                    file_path = old_path
+                    rel_path = old_note["file_path"]
+                    is_update = True
+
+        # 1.6 文件名冲突检测：如果同名文件已存在但属于不同笔记，追加数字后缀
         if is_update:
             existing = db.get_note_by_path(rel_path)
             if existing and existing.get("title") != title:
@@ -350,7 +360,7 @@ async def handle_save(args: dict) -> list[TextContent]:
                 rel_path = str(file_path.relative_to(vault_dir)).replace("\\", "/")
                 is_update = False
 
-        # 1.6 自动 wikilink：检测正文中出现的已知笔记标题，替换为 [[title]] 格式
+        # 1.7 自动 wikilink：检测正文中出现的已知笔记标题，替换为 [[title]] 格式
         all_titles = db.get_all_titles()
         other_titles = [t for t in all_titles if t != title]
         auto_linked_content, auto_link_count = _auto_link_titles(content, other_titles)
