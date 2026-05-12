@@ -90,7 +90,7 @@ cd ~/scripts/vault-mcp-server
 PYTHONIOENCODING=utf-8 python -m pytest tests/ -v
 ```
 
-预期输出：`211 passed`，耗时约 12 秒。
+预期输出：`228 passed`，耗时约 12 秒。
 
 ---
 
@@ -202,7 +202,7 @@ asyncio.run(verify())
 
 预期输出：
 ```
-Server: vault-mcp v1.27.1
+Server: vault-mcp v1.0.3
 注册工具: 13 个
   - vault_init
   - vault_save
