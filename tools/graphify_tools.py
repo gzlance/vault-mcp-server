@@ -57,7 +57,6 @@ async def handle_graphify_build(args: dict) -> list[TextContent]:
         )
 
     graphify_vault = vault_dir / "graphify" / project
-    graphify_vault.mkdir(parents=True, exist_ok=True)
     graph_json = graphify_vault / "graph.json"
 
     try:
@@ -87,6 +86,9 @@ async def handle_graphify_build(args: dict) -> list[TextContent]:
                     "stderr": result.stderr[-1000:],
                 }
             )
+
+        # 构建成功后才创建输出目录（避免失败/超时留下空目录）
+        graphify_vault.mkdir(parents=True, exist_ok=True)
 
         # graphify 默认输出到项目内的 graphify-out/，复制到 Vault 目录
         import shutil
