@@ -28,6 +28,8 @@ sys.path.insert(0, str(_PROJECT_ROOT))
 import sqlite3  # noqa: E402
 from db import VaultDB  # noqa: E402
 from tools.graphify_tools import (  # noqa: E402
+    _build_community_md,
+    _generate_community_notes,
     handle_graphify_build,
     handle_graphify_query,
     handle_graphify_status,
@@ -815,6 +817,307 @@ class TestGraphifyTools(unittest.TestCase):
 
         self.assertEqual(data["status"], "ok")
         self.assertGreaterEqual(data["count"], 1)
+
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4. _generate_community_notes 测试
+    # ═══════════════════════════════════════════════════════════════
+
+    def test_generate_community_notes_basic(self):
+        """正常路径：2 个社区，生成 2 个 Community-*.md 文件。"""
+        nodes = [
+            {"name": "main", "label": "main", "source_file": "app.py", "community": 1},
+            {"name": "helper", "label": "helper", "source_file": "app.py", "community": 1},
+            {"name": "utils", "label": "utils", "source_file": "utils.py", "community": 2},
+        ]
+        links = [
+            {"source": "main", "target": "helper", "relation": "calls"},
+            {"source": "helper", "target": "utils", "relation": "imports"},
+        ]
+        output_dir = self.vault_dir / "graphify" / "gen-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, links, output_dir, "test-proj")
+        self.assertEqual(count, 2)
+
+        c1 = output_dir / "Community-1.md"
+        c2 = output_dir / "Community-2.md"
+        self.assertTrue(c1.exists())
+        self.assertTrue(c2.exists())
+
+        c1_text = c1.read_text(encoding="utf-8")
+        self.assertIn("Community 1", c1_text)
+        self.assertIn("**节点数:** 2", c1_text)  # main + helper 不同 label，不会被去重
+        self.assertIn("`main`", c1_text)
+        self.assertIn("`helper`", c1_text)
+        self.assertIn("calls", c1_text)
+
+        c2_text = c2.read_text(encoding="utf-8")
+        self.assertIn("Community 2", c2_text)
+        self.assertIn("`utils`", c2_text)
+
+    def test_generate_community_notes_empty_nodes(self):
+        """边界路径：空节点列表返回 0。"""
+        output_dir = self.vault_dir / "graphify" / "empty-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes([], [], output_dir, "test")
+        self.assertEqual(count, 0)
+
+    def test_generate_community_notes_no_community_field(self):
+        """边界路径：部分节点无 community 字段被跳过。"""
+        nodes = [
+            {"name": "a", "label": "a", "source_file": "f.py", "community": 1},
+            {"name": "b", "label": "b", "source_file": "f.py"},  # 无 community
+            {"name": "c", "label": "c", "source_file": "g.py", "community": 1},
+        ]
+        output_dir = self.vault_dir / "graphify" / "no-comm-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, [], output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        self.assertIn("`a`", c1_text)
+        self.assertIn("`c`", c1_text)
+        self.assertNotIn("`b`", c1_text)  # 无 community，不会出现
+
+    def test_generate_community_notes_all_no_community(self):
+        """边界路径：所有节点都无 community 字段，返回 0。"""
+        nodes = [
+            {"name": "a", "label": "a", "source_file": "f.py"},
+            {"name": "b", "label": "b", "source_file": "g.py"},
+        ]
+        output_dir = self.vault_dir / "graphify" / "all-no-comm"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, [], output_dir, "test")
+        self.assertEqual(count, 0)
+
+    def test_generate_community_notes_node_dedup(self):
+        """正常路径：相同 source_file + label 的节点被去重。"""
+        nodes = [
+            {"name": "dup1", "label": "foo", "source_file": "a.py", "community": 1},
+            {"name": "dup2", "label": "foo", "source_file": "a.py", "community": 1},
+            {"name": "unique", "label": "bar", "source_file": "a.py", "community": 1},
+        ]
+        output_dir = self.vault_dir / "graphify" / "dedup-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, [], output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        # 去重后只有 2 个节点
+        self.assertIn("**节点数:** 2", c1_text)
+        # foo 只出现一次（不是两次）
+        self.assertEqual(c1_text.count("`foo`"), 1)
+        self.assertIn("`bar`", c1_text)
+
+    def test_generate_community_notes_edge_cap(self):
+        """边界路径：社区超过 50 条边时截断为 50 条。"""
+        nodes = []
+        links = []
+        for i in range(60):
+            node_name = f"n{i}"
+            nodes.append({"name": node_name, "label": node_name, "source_file": "x.py", "community": 1})
+            if i > 0:
+                links.append({"source": "n0", "target": node_name, "relation": "calls"})
+        output_dir = self.vault_dir / "graphify" / "edgecap-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, links, output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        # 只应有 50 条 `--calls-->` 关系
+        self.assertEqual(c1_text.count("--calls-->"), 50)
+
+    def test_generate_community_notes_node_cap_per_file(self):
+        """边界路径：单个文件中超过 30 个符号时截断显示。"""
+        nodes = []
+        for i in range(40):
+            nodes.append({
+                "name": f"f{i}", "label": f"func_{i}",
+                "source_file": "big.py", "community": 1,
+            })
+        output_dir = self.vault_dir / "graphify" / "nodecap-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, [], output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        # 应包含裁剪提示
+        self.assertIn("还有 10 个符号", c1_text)
+        # 只应列出 30 个 func_
+        self.assertEqual(c1_text.count("`func_"), 30)
+
+    def test_generate_community_notes_community_name_from_source(self):
+        """正常路径：社区名取自最高频的源文件名。"""
+        nodes = [
+            {"name": "a", "label": "a", "source_file": "rare.py", "community": 1},
+            {"name": "b", "label": "b", "source_file": "common.py", "community": 1},
+            {"name": "c", "label": "c", "source_file": "common.py", "community": 1},
+            {"name": "d", "label": "d", "source_file": "common.py", "community": 1},
+        ]
+        output_dir = self.vault_dir / "graphify" / "name-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, [], output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        # 最高频 source_file 是 common.py
+        self.assertIn("# Community 1: common.py", c1_text)
+
+    def test_generate_community_notes_community_name_fallback(self):
+        """边界路径：无 source_file 时社区名降级为 "Community N"。"""
+        nodes = [
+            {"name": "a", "label": "a", "community": 1},
+            {"name": "b", "label": "b", "community": 1},
+        ]
+        output_dir = self.vault_dir / "graphify" / "name-fallback-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, [], output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        self.assertIn("# Community 1: Community 1", c1_text)
+
+    def test_generate_community_notes_node_id_field(self):
+        """正常路径：节点使用 "id" 字段（而非 "name"）作为标识。"""
+        nodes = [
+            {"id": "node-a", "label": "Alpha", "source_file": "a.py", "community": 1},
+            {"id": "node-b", "label": "Beta", "source_file": "b.py", "community": 1},
+        ]
+        links = [
+            {"source": "node-a", "target": "node-b", "relation": "uses"},
+        ]
+        output_dir = self.vault_dir / "graphify" / "id-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, links, output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        self.assertIn("`Alpha`", c1_text)
+        self.assertIn("`Beta`", c1_text)
+        self.assertIn("uses", c1_text)
+
+    def test_generate_community_notes_links_unmatched_source(self):
+        """边界路径：link 的 source 在节点索引中不存在时被跳过。"""
+        nodes = [
+            {"name": "real", "label": "Real", "source_file": "a.py", "community": 1},
+        ]
+        links = [
+            {"source": "real", "target": "ghost", "relation": "calls"},
+            {"source": "ghost", "target": "real", "relation": "calls"},
+        ]
+        output_dir = self.vault_dir / "graphify" / "unmatched-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, links, output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        # 只有 source=real 的那条边，target=ghost 正常显示
+        self.assertIn("`Real`", c1_text)
+        # source=ghost 的边：因为 ghost 不在节点索引中，被跳过
+        self.assertEqual(c1_text.count("--calls-->"), 1)
+
+    def test_generate_community_notes_source_location(self):
+        """正常路径：节点有 source_location 时输出包含行号。"""
+        nodes = [
+            {"name": "main", "label": "main", "source_file": "app.py", "source_location": 42, "community": 1},
+        ]
+        output_dir = self.vault_dir / "graphify" / "loc-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        count = _generate_community_notes(nodes, [], output_dir, "test")
+        self.assertEqual(count, 1)
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        self.assertIn("(L42)", c1_text)
+
+    def test_generate_community_notes_frontmatter(self):
+        """正常路径：生成的 Community-*.md 包含正确的 frontmatter。"""
+        nodes = [
+            {"name": "f", "label": "f", "source_file": "mod.py", "community": 1},
+        ]
+        output_dir = self.vault_dir / "graphify" / "fm-test"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        _generate_community_notes(nodes, [], output_dir, "my-project")
+
+        c1 = output_dir / "Community-1.md"
+        c1_text = c1.read_text(encoding="utf-8")
+        self.assertIn("title: _COMMUNITY_Community 1", c1_text)
+        self.assertIn('tags: ["graphify", "code-graph", "my-project"]', c1_text)
+        self.assertIn("type: code-graph", c1_text)
+        self.assertIn("project: my-project", c1_text)
+        self.assertIn("created: ", c1_text)
+
+    # ═══════════════════════════════════════════════════════════════
+    # 5. _build_community_md 测试
+    # ═══════════════════════════════════════════════════════════════
+
+    def test_build_community_md_structure(self):
+        """正常路径：验证 Markdown 结构包含必要章节。"""
+        nodes = [
+            {"label": "foo", "source_file": "a.py"},
+            {"label": "bar", "source_file": "b.py"},
+        ]
+        edge_lines = ["- `foo` --calls--> `bar`"]
+
+        md = _build_community_md(
+            comm_id=3,
+            comm_name="test_module.py",
+            nodes=nodes,
+            edge_lines=edge_lines,
+            project="demo",
+        )
+
+        self.assertIn("---", md)
+        self.assertIn("title: _COMMUNITY_Community 3", md)
+        self.assertIn("project: demo", md)
+        self.assertIn("# Community 3: test_module.py", md)
+        self.assertIn("**节点数:** 2", md)
+        self.assertIn("## 节点", md)
+        self.assertIn("### a.py", md)
+        self.assertIn("### b.py", md)
+        self.assertIn("`foo`", md)
+        self.assertIn("`bar`", md)
+        self.assertIn("## 关系", md)
+        self.assertIn("- `foo` --calls--> `bar`", md)
+
+    def test_build_community_md_no_nodes(self):
+        """边界路径：空节点列表不输出节点章节。"""
+        md = _build_community_md(1, "empty", [], [], "test")
+        self.assertNotIn("## 节点", md)
+
+    def test_build_community_md_no_edges(self):
+        """边界路径：空边列表不输出关系章节。"""
+        nodes = [{"label": "x", "source_file": "a.py"}]
+        md = _build_community_md(1, "no-edges", nodes, [], "test")
+        self.assertNotIn("## 关系", md)
+
+    def test_build_community_md_unknown_file(self):
+        """边界路径：节点无 source_file 时显示"未知文件"。"""
+        nodes = [{"label": "orphan"}]
+        md = _build_community_md(1, "test", nodes, [], "test")
+        self.assertIn("### 未知文件", md)
+        self.assertIn("`orphan`", md)
 
 
 if __name__ == "__main__":

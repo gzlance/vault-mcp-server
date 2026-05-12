@@ -3,21 +3,31 @@
 基于 Obsidian Vault (~/vault/) 提供结构化存储、全文索引和代码图谱能力。
 通过 MCP stdio 协议与 Claude Code 通信。
 """
+
 import asyncio
 import json
 import os
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
-from tools.vault_tools import (
-    handle_init, handle_save, handle_search, handle_resume,
-    handle_list, handle_stats, handle_orphan, handle_update,
-    handle_tags, handle_log,
-)
 from tools.graphify_tools import (
-    handle_graphify_build, handle_graphify_status, handle_graphify_query,
+    handle_graphify_build,
+    handle_graphify_query,
+    handle_graphify_status,
+)
+from tools.vault_tools import (
+    handle_init,
+    handle_list,
+    handle_log,
+    handle_orphan,
+    handle_resume,
+    handle_save,
+    handle_search,
+    handle_stats,
+    handle_tags,
+    handle_update,
 )
 
 # 确保 PYTHONIOENCODING 为 UTF-8（Windows GBK 兼容）
@@ -27,6 +37,7 @@ server = Server("vault-mcp")
 
 
 # ────────────────── 工具注册 ──────────────────
+
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
@@ -39,10 +50,13 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "vault_dir": {"type": "string", "description": "Vault 根目录路径，默认 ~/vault"},
-                    "project": {"type": "string", "description": "可选，同时初始化项目子目录"}
-                }
-            }
+                    "vault_dir": {
+                        "type": "string",
+                        "description": "Vault 根目录路径，默认 ~/vault",
+                    },
+                    "project": {"type": "string", "description": "可选，同时初始化项目子目录"},
+                },
+            },
         ),
         Tool(
             name="vault_save",
@@ -51,23 +65,40 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "笔记标题"},
-                    "content": {"type": "string", "description": "Markdown 正文（不含 frontmatter）"},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "标签列表"},
+                    "content": {
+                        "type": "string",
+                        "description": "Markdown 正文（不含 frontmatter）",
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "标签列表",
+                    },
                     "type": {
                         "type": "string",
-                        "enum": ["permanent", "solution", "concept", "tool", "session-log", "code-graph"],
-                        "description": "笔记类型"
+                        "enum": [
+                            "permanent",
+                            "solution",
+                            "concept",
+                            "tool",
+                            "session-log",
+                            "code-graph",
+                        ],
+                        "description": "笔记类型",
                     },
                     "project": {"type": "string", "description": "归属项目名"},
                     "status": {
                         "type": "string",
                         "enum": ["draft", "permanent", "review", "archived"],
-                        "default": "draft"
+                        "default": "draft",
                     },
-                    "vault_dir": {"type": "string", "description": "Vault 根目录路径，默认 ~/vault"}
+                    "vault_dir": {
+                        "type": "string",
+                        "description": "Vault 根目录路径，默认 ~/vault",
+                    },
                 },
-                "required": ["title", "content", "tags", "type"]
-            }
+                "required": ["title", "content", "tags", "type"],
+            },
         ),
         Tool(
             name="vault_search",
@@ -76,14 +107,18 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "搜索关键词"},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "按标签过滤"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "按标签过滤",
+                    },
                     "project": {"type": "string", "description": "按项目过滤"},
                     "type": {"type": "string", "description": "按笔记类型过滤"},
                     "limit": {"type": "integer", "default": 10},
-                    "offset": {"type": "integer", "default": 0}
+                    "offset": {"type": "integer", "default": 0},
                 },
-                "required": ["query"]
-            }
+                "required": ["query"],
+            },
         ),
         Tool(
             name="vault_resume",
@@ -92,10 +127,14 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "project": {"type": "string", "description": "项目名"},
-                    "log_count": {"type": "integer", "default": 3, "description": "返回最近 N 个会话日志"}
+                    "log_count": {
+                        "type": "integer",
+                        "default": 3,
+                        "description": "返回最近 N 个会话日志",
+                    },
                 },
-                "required": ["project"]
-            }
+                "required": ["project"],
+            },
         ),
         # ── P1 管理工具 ──
         Tool(
@@ -110,19 +149,19 @@ async def list_tools() -> list[Tool]:
                     "status": {"type": "string"},
                     "sort": {"type": "string", "enum": ["created", "updated", "title"]},
                     "limit": {"type": "integer", "default": 20},
-                    "offset": {"type": "integer", "default": 0}
-                }
-            }
+                    "offset": {"type": "integer", "default": 0},
+                },
+            },
         ),
         Tool(
             name="vault_stats",
             description="返回知识库统计面板：笔记总数、按类型/项目分布、Top 标签、最近新增、链接密度。",
-            inputSchema={"type": "object", "properties": {}}
+            inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
             name="vault_orphan",
             description="检测孤立笔记——没有被任何其他笔记引用（入度为0）或不引用任何笔记（出度为0）的笔记。",
-            inputSchema={"type": "object", "properties": {}}
+            inputSchema={"type": "object", "properties": {}},
         ),
         Tool(
             name="vault_update",
@@ -132,20 +171,18 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "note_path": {"type": "string", "description": "笔记文件路径"},
                     "new_content": {"type": "string", "description": "替换正文"},
-                    "append_content": {"type": "string", "description": "追加到正文末尾"}
+                    "append_content": {"type": "string", "description": "追加到正文末尾"},
                 },
-                "required": ["note_path"]
-            }
+                "required": ["note_path"],
+            },
         ),
         Tool(
             name="vault_tags",
             description="返回所有已用标签及使用频次，支持标签模糊搜索。",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "标签模糊搜索关键词"}
-                }
-            }
+                "properties": {"query": {"type": "string", "description": "标签模糊搜索关键词"}},
+            },
         ),
         Tool(
             name="vault_log",
@@ -155,11 +192,19 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "project": {"type": "string", "description": "项目名"},
                     "summary": {"type": "string", "description": "做了什么"},
-                    "decisions": {"type": "array", "items": {"type": "string"}, "description": "决策列表"},
-                    "todos": {"type": "array", "items": {"type": "string"}, "description": "待办列表"}
+                    "decisions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "决策列表",
+                    },
+                    "todos": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "待办列表",
+                    },
                 },
-                "required": ["project", "summary"]
-            }
+                "required": ["project", "summary"],
+            },
         ),
         # ── P1 graphify 工具 ──
         Tool(
@@ -170,10 +215,10 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "project": {"type": "string", "description": "项目名"},
                     "project_dir": {"type": "string", "description": "项目根目录路径"},
-                    "force": {"type": "boolean", "default": True}
+                    "force": {"type": "boolean", "default": True},
                 },
-                "required": ["project", "project_dir"]
-            }
+                "required": ["project", "project_dir"],
+            },
         ),
         Tool(
             name="graphify_status",
@@ -181,8 +226,8 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {"project": {"type": "string"}},
-                "required": ["project"]
-            }
+                "required": ["project"],
+            },
         ),
         Tool(
             name="graphify_query",
@@ -192,10 +237,10 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "project": {"type": "string"},
                     "symbol": {"type": "string", "description": "符号名，支持模糊匹配"},
-                    "fuzzy": {"type": "boolean", "default": True}
+                    "fuzzy": {"type": "boolean", "default": True},
                 },
-                "required": ["project", "symbol"]
-            }
+                "required": ["project", "symbol"],
+            },
         ),
     ]
 
@@ -231,7 +276,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "graphify_query":
             return await _handle_graphify_query(arguments)
         else:
-            return [TextContent(type="text", text=json.dumps({"error": f"未知工具: {name}"}, ensure_ascii=False))]
+            return [
+                TextContent(
+                    type="text", text=json.dumps({"error": f"未知工具: {name}"}, ensure_ascii=False)
+                )
+            ]
     except Exception as exc:
         return [TextContent(type="text", text=json.dumps({"error": str(exc)}, ensure_ascii=False))]
 
@@ -255,13 +304,10 @@ _handle_graphify_query = handle_graphify_query
 
 # ────────────────── 启动入口 ──────────────────
 
+
 async def main():
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            server.create_initialization_options()
-        )
+        await server.run(read_stream, write_stream, server.create_initialization_options())
 
 
 if __name__ == "__main__":

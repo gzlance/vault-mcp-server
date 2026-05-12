@@ -1,4 +1,5 @@
 """Vault MCP Server — 工具模块共享函数。"""
+
 import json
 from pathlib import Path
 
@@ -33,7 +34,9 @@ def check_tags(tags) -> list[TextContent] | None:
         if not isinstance(tag, str):
             return json_reply({"status": "error", "message": f"标签值必须为字符串: {tag}"})
         if len(tag) > 50:
-            return json_reply({"status": "error", "message": f"标签过长（最大50字符）: {tag[:50]}..."})
+            return json_reply(
+                {"status": "error", "message": f"标签过长（最大50字符）: {tag[:50]}..."}
+            )
     return None
 
 
@@ -42,5 +45,7 @@ def check_title(title: str) -> list[TextContent] | None:
     if not title or not title.strip():
         return json_reply({"status": "error", "message": "标题不能为空"})
     if len(title) > 200:
-        return json_reply({"status": "error", "message": f"标题过长（最长200字符，当前{len(title)}字符）"})
+        return json_reply(
+            {"status": "error", "message": f"标题过长（最长200字符，当前{len(title)}字符）"}
+        )
     return None

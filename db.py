@@ -65,9 +65,9 @@ class VaultDB:
         self.conn = sqlite3.connect(str(self.db_path))
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
-        self.conn.execute("PRAGMA cache_size=-8000")       # 8MB 页面缓存（负值单位 KB）
-        self.conn.execute("PRAGMA mmap_size=268435456")    # 256MB 内存映射 I/O
-        self.conn.execute("PRAGMA synchronous=NORMAL")     # 写性能优化（非 FULL 安全模式）
+        self.conn.execute("PRAGMA cache_size=-8000")  # 8MB 页面缓存（负值单位 KB）
+        self.conn.execute("PRAGMA mmap_size=268435456")  # 256MB 内存映射 I/O
+        self.conn.execute("PRAGMA synchronous=NORMAL")  # 写性能优化（非 FULL 安全模式）
         self.conn.row_factory = sqlite3.Row
 
     def _ensure_connected(self):
@@ -149,17 +149,37 @@ class VaultDB:
 
     # ── 笔记索引操作 ──
 
-    def insert_note(self, title: str, file_path: str, tags: str, type: str,
-                    project: str, status: str, created: str, updated: str,
-                    word_count: int = 0, checksum: str | None = None) -> int:
+    def insert_note(
+        self,
+        title: str,
+        file_path: str,
+        tags: str,
+        type: str,
+        project: str,
+        status: str,
+        created: str,
+        updated: str,
+        word_count: int = 0,
+        checksum: str | None = None,
+    ) -> int:
         """插入笔记记录，返回 row id。"""
         self._ensure_connected()
         cursor = self.conn.execute(
             """INSERT INTO notes (title, file_path, tags, type, project, status,
                                   created, updated, word_count, checksum)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (title, file_path, tags, type, project or None, status,
-             created, updated, word_count, checksum)
+            (
+                title,
+                file_path,
+                tags,
+                type,
+                project or None,
+                status,
+                created,
+                updated,
+                word_count,
+                checksum,
+            ),
         )
         self.conn.commit()
         return cursor.lastrowid
@@ -170,26 +190,32 @@ class VaultDB:
         if not kwargs:
             return False
 
-        allowed = {"title", "file_path", "tags", "type", "project",
-                   "status", "created", "updated", "word_count", "checksum"}
+        allowed = {
+            "title",
+            "file_path",
+            "tags",
+            "type",
+            "project",
+            "status",
+            "created",
+            "updated",
+            "word_count",
+            "checksum",
+        }
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         values = list(updates.values()) + [note_id]
-        cursor = self.conn.execute(
-            f"UPDATE notes SET {set_clause} WHERE id = ?", values
-        )
+        cursor = self.conn.execute(f"UPDATE notes SET {set_clause} WHERE id = ?", values)
         self.conn.commit()
         return cursor.rowcount > 0
 
     def delete_note(self, file_path: str) -> bool:
         """删除笔记记录及其 FTS 索引和关联 wikilinks。"""
         self._ensure_connected()
-        row = self.conn.execute(
-            "SELECT id FROM notes WHERE file_path = ?", (file_path,)
-        ).fetchone()
+        row = self.conn.execute("SELECT id FROM notes WHERE file_path = ?", (file_path,)).fetchone()
         if row is None:
             return False
 
@@ -197,8 +223,7 @@ class VaultDB:
         self.conn.execute("DELETE FROM notes_fts WHERE rowid = ?", (note_id,))
         self.conn.execute("DELETE FROM notes WHERE id = ?", (note_id,))
         self.conn.execute(
-            "DELETE FROM wikilinks WHERE source_path = ? OR target_path = ?",
-            (file_path, file_path)
+            "DELETE FROM wikilinks WHERE source_path = ? OR target_path = ?", (file_path, file_path)
         )
         self.conn.commit()
         return True
@@ -206,17 +231,13 @@ class VaultDB:
     def get_note_by_path(self, file_path: str) -> dict | None:
         """根据文件路径查询笔记。"""
         self._ensure_connected()
-        row = self.conn.execute(
-            "SELECT * FROM notes WHERE file_path = ?", (file_path,)
-        ).fetchone()
+        row = self.conn.execute("SELECT * FROM notes WHERE file_path = ?", (file_path,)).fetchone()
         return dict(row) if row else None
 
     def get_note_by_title(self, title: str) -> dict | None:
         """根据标题查询笔记。"""
         self._ensure_connected()
-        row = self.conn.execute(
-            "SELECT * FROM notes WHERE title = ?", (title,)
-        ).fetchone()
+        row = self.conn.execute("SELECT * FROM notes WHERE title = ?", (title,)).fetchone()
         return dict(row) if row else None
 
     def get_all_titles(self) -> list[str]:
@@ -227,9 +248,15 @@ class VaultDB:
 
     # ── FTS5 全文搜索 ──
 
-    def search(self, query: str, tags: str | None = None,
-               project: str | None = None, type: str | None = None,
-               limit: int = 10, offset: int = 0) -> list[dict]:
+    def search(
+        self,
+        query: str,
+        tags: str | None = None,
+        project: str | None = None,
+        type: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> list[dict]:
         """BM25 排序的全文搜索。
 
         对 notes_fts 虚拟表进行 FTS5 查询，JOIN notes 获取元数据。
@@ -241,8 +268,7 @@ class VaultDB:
 
         # 构建 FTS5 查询（冒号分割短语精确匹配，OR 连接词级匹配）
         if query.strip():
-            terms = [f'"{term}"' if " " in term else term
-                     for term in query.strip().split()]
+            terms = [f'"{term}"' if " " in term else term for term in query.strip().split()]
             fts_query = " OR ".join(terms) if terms else query.strip()
             where_clauses.append("notes_fts MATCH ?")
             params.append(fts_query)
@@ -298,7 +324,7 @@ class VaultDB:
         self.conn.execute("DELETE FROM notes_fts WHERE rowid = ?", (note_id,))
         self.conn.execute(
             "INSERT INTO notes_fts(rowid, title, content) VALUES (?, ?, ?)",
-            (note_id, title, content)
+            (note_id, title, content),
         )
         self.conn.commit()
 
@@ -358,7 +384,7 @@ class VaultDB:
             self.conn.execute(
                 """INSERT INTO tag_index (tag, count, last_used) VALUES (?, 1, ?)
                    ON CONFLICT(tag) DO UPDATE SET count = count + 1, last_used = ?""",
-                (tag, now, now)
+                (tag, now, now),
             )
         self.conn.commit()
 
@@ -369,7 +395,7 @@ class VaultDB:
             rows = self.conn.execute(
                 """SELECT tag, count, last_used FROM tag_index
                    WHERE tag LIKE ? ORDER BY count DESC""",
-                (f"%{query}%",)
+                (f"%{query}%",),
             ).fetchall()
         else:
             rows = self.conn.execute(
@@ -419,9 +445,7 @@ class VaultDB:
                     tag_stats[tag] = (1, updated)
 
         # 批量 INSERT，一次性提交
-        batch_data = [
-            (tag, cnt, last_used) for tag, (cnt, last_used) in tag_stats.items()
-        ]
+        batch_data = [(tag, cnt, last_used) for tag, (cnt, last_used) in tag_stats.items()]
         if batch_data:
             self.conn.executemany(
                 "INSERT INTO tag_index (tag, count, last_used) VALUES (?, ?, ?)",
@@ -433,18 +457,17 @@ class VaultDB:
 
     # ── wikilink 引用图 ──
 
-    def update_wikilinks(self, source_path: str, target_paths: list[str],
-                         context: str | None = None):
+    def update_wikilinks(
+        self, source_path: str, target_paths: list[str], context: str | None = None
+    ):
         """替换某篇笔记的出站 wikilink 记录。先删旧，再批量写入。"""
         self._ensure_connected()
-        self.conn.execute(
-            "DELETE FROM wikilinks WHERE source_path = ?", (source_path,)
-        )
+        self.conn.execute("DELETE FROM wikilinks WHERE source_path = ?", (source_path,))
         for target in target_paths:
             self.conn.execute(
                 """INSERT OR IGNORE INTO wikilinks (source_path, target_path, context)
                    VALUES (?, ?, ?)""",
-                (source_path, target, context)
+                (source_path, target, context),
             )
         self.conn.commit()
 
@@ -455,12 +478,10 @@ class VaultDB:
             {source_path: [target_path, ...], ...}
         """
         self._ensure_connected()
-        rows = self.conn.execute(
-            """SELECT w.source_path, w.target_path
+        rows = self.conn.execute("""SELECT w.source_path, w.target_path
                FROM wikilinks w
                JOIN notes n1 ON w.source_path = n1.file_path
-               JOIN notes n2 ON w.target_path = n2.file_path"""
-        ).fetchall()
+               JOIN notes n2 ON w.target_path = n2.file_path""").fetchall()
 
         graph: dict[str, set[str]] = {}
         for row in rows:
@@ -470,9 +491,14 @@ class VaultDB:
 
     # ── graphify 构建记录 ──
 
-    def record_graphify_build(self, project: str, node_count: int,
-                              edge_count: int, community_count: int,
-                              commit_sha: str | None = None) -> int:
+    def record_graphify_build(
+        self,
+        project: str,
+        node_count: int,
+        edge_count: int,
+        community_count: int,
+        commit_sha: str | None = None,
+    ) -> int:
         """记录一次 graphify 代码图谱构建。"""
         self._ensure_connected()
         built_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -480,7 +506,7 @@ class VaultDB:
             """INSERT INTO graphify_builds (project, commit_sha, node_count,
                                            edge_count, community_count, built_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (project, commit_sha, node_count, edge_count, community_count, built_at)
+            (project, commit_sha, node_count, edge_count, community_count, built_at),
         )
         self.conn.commit()
         return cursor.lastrowid
@@ -492,22 +518,28 @@ class VaultDB:
             """SELECT * FROM graphify_builds
                WHERE project = ?
                ORDER BY built_at DESC LIMIT 1""",
-            (project,)
+            (project,),
         ).fetchone()
         return dict(row) if row else None
 
     # ── 会话日志 ──
 
-    def insert_session_log(self, project: str, date: str, file_path: str,
-                           summary: str, decisions: str | None = None,
-                           todos: str | None = None) -> int:
+    def insert_session_log(
+        self,
+        project: str,
+        date: str,
+        file_path: str,
+        summary: str,
+        decisions: str | None = None,
+        todos: str | None = None,
+    ) -> int:
         """插入一条会话日志记录。"""
         self._ensure_connected()
         cursor = self.conn.execute(
             """INSERT INTO session_logs (project, date, file_path, summary,
                                          decisions, todos)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (project, date, file_path, summary, decisions, todos)
+            (project, date, file_path, summary, decisions, todos),
         )
         self.conn.commit()
         return cursor.lastrowid
@@ -519,7 +551,7 @@ class VaultDB:
             """SELECT * FROM session_logs
                WHERE project = ?
                ORDER BY date DESC LIMIT ?""",
-            (project, count)
+            (project, count),
         ).fetchall()
         return [dict(row) for row in rows]
 
@@ -540,9 +572,16 @@ class VaultDB:
         self.reindex_note(note_id, title, content)
         return True
 
-    def list_notes(self, tags: list[str] | None = None, project: str | None = None,
-                   note_type: str | None = None, status: str | None = None,
-                   sort: str = "updated", limit: int = 20, offset: int = 0) -> list[dict]:
+    def list_notes(
+        self,
+        tags: list[str] | None = None,
+        project: str | None = None,
+        note_type: str | None = None,
+        status: str | None = None,
+        sort: str = "updated",
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[dict]:
         """按条件列出笔记，支持分页排序。"""
         self._ensure_connected()
         clauses = ["1=1"]
@@ -560,7 +599,9 @@ class VaultDB:
         if status:
             clauses.append("status = ?")
             params.append(status)
-        sort_col = {"updated": "updated", "created": "created", "title": "title"}.get(sort, "updated")
+        sort_col = {"updated": "updated", "created": "created", "title": "title"}.get(
+            sort, "updated"
+        )
         sql = f"SELECT * FROM notes WHERE {' AND '.join(clauses)} ORDER BY {sort_col} DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         return [dict(r) for r in self.conn.execute(sql, params).fetchall()]
@@ -568,17 +609,16 @@ class VaultDB:
     def find_orphans(self) -> dict:
         """检测孤立笔记（入度或出度为零）。"""
         self._ensure_connected()
-        no_incoming = self.conn.execute(
-            """SELECT n.* FROM notes n
+        no_incoming = self.conn.execute("""SELECT n.* FROM notes n
                WHERE n.file_path NOT IN (SELECT DISTINCT target_path FROM wikilinks)
-               AND n.type != 'session-log'"""
-        ).fetchall()
-        no_outgoing = self.conn.execute(
-            """SELECT n.* FROM notes n
+               AND n.type != 'session-log'""").fetchall()
+        no_outgoing = self.conn.execute("""SELECT n.* FROM notes n
                WHERE n.file_path NOT IN (SELECT DISTINCT source_path FROM wikilinks)
-               AND n.type != 'session-log'"""
-        ).fetchall()
-        return {"no_incoming": [dict(r) for r in no_incoming], "no_outgoing": [dict(r) for r in no_outgoing]}
+               AND n.type != 'session-log'""").fetchall()
+        return {
+            "no_incoming": [dict(r) for r in no_incoming],
+            "no_outgoing": [dict(r) for r in no_outgoing],
+        }
 
     def get_recent_architecture_notes(self, project: str, limit: int = 5) -> list[dict]:
         """获取项目最近架构笔记（permanent/solution 类型）。"""
@@ -601,9 +641,7 @@ class VaultDB:
         """
         self._ensure_connected()
 
-        total_notes = self.conn.execute(
-            "SELECT COUNT(*) as cnt FROM notes"
-        ).fetchone()["cnt"]
+        total_notes = self.conn.execute("SELECT COUNT(*) as cnt FROM notes").fetchone()["cnt"]
 
         type_rows = self.conn.execute(
             "SELECT type, COUNT(*) as cnt FROM notes GROUP BY type ORDER BY cnt DESC"
@@ -626,9 +664,9 @@ class VaultDB:
             "SELECT COUNT(*) as cnt FROM notes WHERE created >= ?", (week_ago,)
         ).fetchone()["cnt"]
 
-        total_wikilinks = self.conn.execute(
-            "SELECT COUNT(*) as cnt FROM wikilinks"
-        ).fetchone()["cnt"]
+        total_wikilinks = self.conn.execute("SELECT COUNT(*) as cnt FROM wikilinks").fetchone()[
+            "cnt"
+        ]
 
         avg_links = round(total_wikilinks / total_notes, 2) if total_notes > 0 else 0
 

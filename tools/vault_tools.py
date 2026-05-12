@@ -2,18 +2,24 @@
 
 提供 vault_init/save/search/resume/list/stats/orphan/update/tags/log 的处理逻辑。
 """
+
+import hashlib
 import json
 import re
-import hashlib
 import shutil
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
 
 from mcp.types import TextContent
 
 from db import VaultDB
-from tools._shared import json_reply, get_vault_dir, DEFAULT_VAULT_DIR, check_required, check_tags, check_title
+from tools._shared import (
+    check_required,
+    check_tags,
+    check_title,
+    get_vault_dir,
+    json_reply,
+)
 
 # ── 目录结构模板 ──
 VAULT_DIRS = [
@@ -70,7 +76,9 @@ def _to_kebab(title: str) -> str:
     return name.strip("-")
 
 
-def _resolve_file_path(vault_dir: Path, title: str, note_type: str, project: Optional[str] = None) -> Path:
+def _resolve_file_path(
+    vault_dir: Path, title: str, note_type: str, project: str | None = None
+) -> Path:
     """根据类型和项目决定文件保存路径。"""
     filename = _to_kebab(title) + ".md"
     if note_type == "session-log":
@@ -111,10 +119,7 @@ def _find_wikilinkable_spans(content: str, known_titles: list[str]) -> list[dict
         existing_ranges.append((match.start(), match.end()))
 
     def _inside_existing(pos: int) -> bool:
-        for s, e in existing_ranges:
-            if s <= pos < e:
-                return True
-        return False
+        return any(s <= pos < e for s, e in existing_ranges)
 
     spans = []
     for title in known_titles:
@@ -130,11 +135,13 @@ def _find_wikilinkable_spans(content: str, known_titles: list[str]) -> list[dict
             # 跳过位于 YAML frontmatter 内的匹配
             if match.start() < 4:
                 continue
-            spans.append({
-                "start": match.start(),
-                "end": match.end(),
-                "title": title_clean,
-            })
+            spans.append(
+                {
+                    "start": match.start(),
+                    "end": match.end(),
+                    "title": title_clean,
+                }
+            )
 
     # 去重：按 start 排序，重叠区间保留更长的
     spans.sort(key=lambda s: (s["start"], -(s["end"] - s["start"])))
@@ -163,10 +170,12 @@ def _suggest_wikilinks(content: str, known_titles: list[str]) -> list[dict]:
         start_ctx = max(0, span["start"] - 30)
         end_ctx = min(len(content), span["end"] + 30)
         context = content[start_ctx:end_ctx].replace("\n", " ")
-        suggestions.append({
-            "target": _to_kebab(span["title"]) + ".md",
-            "context": context,
-        })
+        suggestions.append(
+            {
+                "target": _to_kebab(span["title"]) + ".md",
+                "context": context,
+            }
+        )
     return suggestions
 
 
@@ -179,20 +188,19 @@ def _auto_link_titles(content: str, known_titles: list[str]) -> tuple[str, int]:
     new_content = content
     for span in spans:
         new_content = (
-            new_content[:span["start"]]
-            + f"[[{span['title']}]]"
-            + new_content[span["end"]:]
+            new_content[: span["start"]] + f"[[{span['title']}]]" + new_content[span["end"] :]
         )
     return new_content, len(spans)
 
 
-def _build_frontmatter(title: str, tags: list[str], note_type: str,
-                       project: Optional[str], status: str) -> str:
+def _build_frontmatter(
+    title: str, tags: list[str], note_type: str, project: str | None, status: str
+) -> str:
     """生成 YAML frontmatter 文本。"""
     today = date.today().isoformat()
     lines = [
         "---",
-        f"title: \"{title}\"",
+        f'title: "{title}"',
         f"tags: {json.dumps(tags, ensure_ascii=False)}",
         f"created: {today}",
         f"updated: {today}",
@@ -206,6 +214,7 @@ def _build_frontmatter(title: str, tags: list[str], note_type: str,
 
 
 # ── vault_init ──
+
 
 async def handle_init(args: dict) -> list[TextContent]:
     vault_dir = get_vault_dir(args)
@@ -225,13 +234,17 @@ async def handle_init(args: dict) -> list[TextContent]:
 
     default_tpl = templates_dir / "default-note.md"
     if not default_tpl.exists():
-        default_tpl.write_text(TEMPLATE_NOTE.format(title="笔记标题", date=date.today().isoformat()), encoding="utf-8")
+        default_tpl.write_text(
+            TEMPLATE_NOTE.format(title="笔记标题", date=date.today().isoformat()), encoding="utf-8"
+        )
         results.append("created template: default-note.md")
 
     session_tpl = templates_dir / "session-log.md"
     if not session_tpl.exists():
         session_tpl.write_text(
-            TEMPLATE_SESSION_LOG.format(title="会话日志", date=date.today().isoformat(), project="{project}"),
+            TEMPLATE_SESSION_LOG.format(
+                title="会话日志", date=date.today().isoformat(), project="{project}"
+            ),
             encoding="utf-8",
         )
         results.append("created template: session-log.md")
@@ -244,7 +257,8 @@ async def handle_init(args: dict) -> list[TextContent]:
     # 3.5 创建 Vault CLAUDE.md（幂等——已存在则跳过）
     vault_claude = vault_dir / "CLAUDE.md"
     if not vault_claude.exists():
-        vault_claude.write_text("""# Vault — Claude Code 知识库
+        vault_claude.write_text(
+            """# Vault — Claude Code 知识库
 
 ## 笔记规则
 - 文件名使用 kebab-case，中文会被自动移除仅保留英文字符
@@ -265,7 +279,9 @@ async def handle_init(args: dict) -> list[TextContent]:
 - `logs/` — 全局会话日志
 - `<project>/` — 项目笔记（architecture/features/data/logs）
 - `graphify/<project>/` — 代码图谱笔记
-""", encoding="utf-8")
+""",
+            encoding="utf-8",
+        )
         results.append("created vault CLAUDE.md")
 
     # 4. 如果指定了项目，创建项目子目录
@@ -279,6 +295,7 @@ async def handle_init(args: dict) -> list[TextContent]:
 
 
 # ── vault_save ──
+
 
 async def handle_save(args: dict) -> list[TextContent]:
     # 输入校验
@@ -332,10 +349,12 @@ async def handle_save(args: dict) -> list[TextContent]:
         usage = shutil.disk_usage(file_path.parent)
         free_mb = usage.free // (1024 * 1024)
         if usage.free < 10 * 1024 * 1024:
-            return json_reply({
-                "status": "error",
-                "message": f"磁盘空间不足（仅剩 {free_mb}MB），无法保存笔记",
-            })
+            return json_reply(
+                {
+                    "status": "error",
+                    "message": f"磁盘空间不足（仅剩 {free_mb}MB），无法保存笔记",
+                }
+            )
 
         # 4. 写入文件
         file_path.write_text(full_md, encoding="utf-8")
@@ -395,6 +414,7 @@ async def handle_save(args: dict) -> list[TextContent]:
 
 # ── vault_search ──
 
+
 async def handle_search(args: dict) -> list[TextContent]:
     query = args.get("query", "")
     if not query or not query.strip():
@@ -411,18 +431,19 @@ async def handle_search(args: dict) -> list[TextContent]:
     tags_str = ",".join(tags) if isinstance(tags, list) else tags
     with db:
         results = db.search(
-        query=query,
-        tags=tags_str,
-        project=project,
-        type=note_type,
-        limit=limit,
-        offset=offset,
-    )
+            query=query,
+            tags=tags_str,
+            project=project,
+            type=note_type,
+            limit=limit,
+            offset=offset,
+        )
 
     return json_reply({"status": "ok", "query": query, "count": len(results), "results": results})
 
 
 # ── vault_resume ──
+
 
 async def handle_resume(args: dict) -> list[TextContent]:
     # 输入校验
@@ -448,15 +469,18 @@ async def handle_resume(args: dict) -> list[TextContent]:
             log["content_preview"] = "(文件不存在)"
         enriched_logs.append(log)
 
-    return json_reply({
-        "status": "ok",
-        "project": project,
-        "recent_logs": enriched_logs,
-        "recent_architecture_notes": arch_notes,
-    })
+    return json_reply(
+        {
+            "status": "ok",
+            "project": project,
+            "recent_logs": enriched_logs,
+            "recent_architecture_notes": arch_notes,
+        }
+    )
 
 
 # ── vault_list ──
+
 
 async def handle_list(args: dict) -> list[TextContent]:
     db = VaultDB()
@@ -474,6 +498,7 @@ async def handle_list(args: dict) -> list[TextContent]:
 
 # ── vault_stats ──
 
+
 async def handle_stats(args: dict) -> list[TextContent]:
     db = VaultDB()
     stats = db.get_stats()
@@ -482,19 +507,23 @@ async def handle_stats(args: dict) -> list[TextContent]:
 
 # ── vault_orphan ──
 
+
 async def handle_orphan(args: dict) -> list[TextContent]:
     db = VaultDB()
     orphans = db.find_orphans()
-    return json_reply({
-        "status": "ok",
-        "no_incoming_count": len(orphans["no_incoming"]),
-        "no_outgoing_count": len(orphans["no_outgoing"]),
-        "no_incoming": orphans["no_incoming"],
-        "no_outgoing": orphans["no_outgoing"],
-    })
+    return json_reply(
+        {
+            "status": "ok",
+            "no_incoming_count": len(orphans["no_incoming"]),
+            "no_outgoing_count": len(orphans["no_outgoing"]),
+            "no_incoming": orphans["no_incoming"],
+            "no_outgoing": orphans["no_outgoing"],
+        }
+    )
 
 
 # ── vault_update ──
+
 
 async def handle_update(args: dict) -> list[TextContent]:
     # 输入校验
@@ -518,7 +547,7 @@ async def handle_update(args: dict) -> list[TextContent]:
         raw = full_path.read_text(encoding="utf-8")
         fm_end = raw.find("---\n", 4)
         if fm_end != -1:
-            updated = raw[:fm_end + 4] + "\n" + new_content + "\n"
+            updated = raw[: fm_end + 4] + "\n" + new_content + "\n"
         else:
             updated = new_content
         full_path.write_text(updated, encoding="utf-8")
@@ -532,7 +561,7 @@ async def handle_update(args: dict) -> list[TextContent]:
         # 重新计算索引
         new_full = full_path.read_text(encoding="utf-8")
         fm_end = new_full.find("---\n", 4)
-        body = new_full[fm_end + 4:] if fm_end != -1 else new_full
+        body = new_full[fm_end + 4 :] if fm_end != -1 else new_full
         db = VaultDB()
         db.update_note_content(note_path, body)
         return json_reply({"status": "ok", "action": "appended"})
@@ -542,6 +571,7 @@ async def handle_update(args: dict) -> list[TextContent]:
 
 # ── vault_tags ──
 
+
 async def handle_tags(args: dict) -> list[TextContent]:
     query = args.get("query")
     db = VaultDB()
@@ -550,6 +580,7 @@ async def handle_tags(args: dict) -> list[TextContent]:
 
 
 # ── vault_log ──
+
 
 async def handle_log(args: dict) -> list[TextContent]:
     # 输入校验
