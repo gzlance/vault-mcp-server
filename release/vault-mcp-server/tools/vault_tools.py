@@ -76,6 +76,28 @@ def _to_kebab(title: str) -> str:
     return name.strip("-")
 
 
+# 笔记类型到项目子目录的映射
+_TYPE_TO_SUBDIR: dict[str, str] = {
+    "permanent": "architecture",
+    "concept": "architecture",
+    "solution": "features",
+    "tool": "data",
+}
+
+
+def _type_to_subdir(note_type: str) -> str:
+    """返回笔记类型对应的项目子目录，未知类型默认放根目录。"""
+    return _TYPE_TO_SUBDIR.get(note_type, "")
+
+
+def _detect_project(vault_dir: Path) -> str | None:
+    """从 CWD 自动检测项目名：CWD 目录名匹配 ~/vault 下已有项目目录时返回。"""
+    cwd_name = Path.cwd().name
+    if (vault_dir / cwd_name).is_dir():
+        return cwd_name
+    return None
+
+
 def _resolve_file_path(
     vault_dir: Path, title: str, note_type: str, project: str | None = None
 ) -> Path:
@@ -90,7 +112,9 @@ def _resolve_file_path(
     elif note_type == "code-graph":
         return vault_dir / "graphify" / (project or "") / filename
     elif project:
-        return vault_dir / project / filename
+        # 按笔记类型路由到项目子目录
+        subdir = _type_to_subdir(note_type)
+        return vault_dir / project / subdir / filename
     else:
         return vault_dir / "permanent" / filename
 
@@ -310,9 +334,12 @@ async def handle_save(args: dict) -> list[TextContent]:
     content = args["content"]
     tags = args["tags"]
     note_type = args["type"]
-    project = args.get("project")
-    status = args.get("status", "draft")
     vault_dir = get_vault_dir(args)
+    project = args.get("project")
+    # project 未传时自动从 CWD 检测；显式传 None/"" 则强制不进项目
+    if "project" not in args:
+        project = _detect_project(vault_dir)
+    status = args.get("status", "draft")
 
     # 1. 确定文件路径，确保目录存在
     file_path = _resolve_file_path(vault_dir, title, note_type, project)
@@ -321,7 +348,17 @@ async def handle_save(args: dict) -> list[TextContent]:
     is_update = file_path.exists()
 
     with VaultDB() as db:
-        # 1.5 文件名冲突检测：如果同名文件已存在但属于不同笔记，追加数字后缀
+        # 1.5 回退匹配：新路径不存在时，按标题查找旧路径（兼容路由规则变更前的笔记）
+        if not is_update:
+            old_note = db.get_note_by_title(title)
+            if old_note:
+                old_path = vault_dir / old_note["file_path"]
+                if old_path.exists():
+                    file_path = old_path
+                    rel_path = old_note["file_path"]
+                    is_update = True
+
+        # 1.6 文件名冲突检测：如果同名文件已存在但属于不同笔记，追加数字后缀
         if is_update:
             existing = db.get_note_by_path(rel_path)
             if existing and existing.get("title") != title:
@@ -334,7 +371,7 @@ async def handle_save(args: dict) -> list[TextContent]:
                 rel_path = str(file_path.relative_to(vault_dir)).replace("\\", "/")
                 is_update = False
 
-        # 1.6 自动 wikilink：检测正文中出现的已知笔记标题，替换为 [[title]] 格式
+        # 1.7 自动 wikilink：检测正文中出现的已知笔记标题，替换为 [[title]] 格式
         all_titles = db.get_all_titles()
         other_titles = [t for t in all_titles if t != title]
         auto_linked_content, auto_link_count = _auto_link_titles(content, other_titles)

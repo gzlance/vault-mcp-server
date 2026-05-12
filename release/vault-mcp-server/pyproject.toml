@@ -1,6 +1,6 @@
 [project]
 name = "vault-mcp-server"
-version = "1.0.2"
+version = "1.0.3"
 description = "个人知识库 + 代码图谱统一 MCP 服务"
 requires-python = ">=3.10"
 dependencies = [

@@ -45,4 +45,4 @@ bash install.sh --install-dir /opt/vault-mcp --skip-tests
 
 ## 版本
 
-v1.0.2 — 2026-05-12
+v1.0.3 — 2026-05-12
