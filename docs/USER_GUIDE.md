@@ -1,6 +1,6 @@
 # Vault MCP Server 使用手册
 
-**版本:** 1.0 | **更新:** 2026-05-11 | **目标用户:** Claude Code 用户
+**版本:** 1.0.3 | **更新:** 2026-05-12 | **目标用户:** Claude Code 用户
 
 ---
 
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File release/install.ps1
 bash release/install.sh
 ```
 
-脚本自动完成：文件复制、pip 依赖安装、MCP 配置写入 `~/.claude.json`、`/kb` Skill 安装。
+脚本自动完成：文件复制、pip 依赖安装、MCP 配置写入 `~/.claude/mcp.json`、`/kb` Skill 安装。
 
 **方式 2：手动安装**
 
@@ -35,7 +35,7 @@ bash release/install.sh
 # 1. 安装依赖
 pip install mcp>=1.0.0
 
-# 2. 编辑 ~/.claude.json，在 mcpServers 中添加：
+# 2. 编辑 ~/.claude/mcp.json，在 mcpServers 中添加：
 # {
 #   "mcpServers": {
 #     "vault": {
@@ -253,14 +253,16 @@ Git push 报 Permission denied...       # 排查问题
 
 ## 4. 笔记类型说明
 
-| type | 用途 | 典型场景 | 存放位置 |
-|------|------|----------|----------|
-| `permanent` | 永久知识 | 设计模式、最佳实践 | `~/vault/permanent/` |
-| `solution` | 解决方案 | 排查过程+根因+步骤 | `~/vault/permanent/` 或 `<project>/` |
-| `concept` | 概念解释 | 技术名词、原理、学习笔记 | `~/vault/permanent/` |
-| `tool` | 工具技巧 | CLI备忘、IDE配置、踩坑 | `~/vault/permanent/` |
-| `session-log` | 会话日志 | 每日工作记录 | `~/vault/logs/` 或 `<project>/logs/` |
-| `code-graph` | 代码图谱 | graphify 自动生成 | `~/vault/graphify/<project>/` |
+| type | 用途 | 典型场景 | 存放位置（无项目） | 存放位置（有项目） |
+|------|------|----------|-------------------|-------------------|
+| `permanent` | 永久知识 | 设计模式、最佳实践 | `~/vault/permanent/` | `~/vault/<project>/architecture/` |
+| `solution` | 解决方案 | 排查过程+根因+步骤 | `~/vault/permanent/` | `~/vault/<project>/features/` |
+| `concept` | 概念解释 | 技术名词、原理、学习笔记 | `~/vault/permanent/` | `~/vault/<project>/architecture/` |
+| `tool` | 工具技巧 | CLI备忘、IDE配置、踩坑 | `~/vault/permanent/` | `~/vault/<project>/data/` |
+| `session-log` | 会话日志 | 每日工作记录 | `~/vault/logs/` | `~/vault/<project>/logs/` |
+| `code-graph` | 代码图谱 | graphify 自动生成 | — | `~/vault/graphify/<project>/` |
+
+> **项目自动检测:** 在项目窗口中 `vault_save` 自动从 CWD 检测项目名。系统级知识（如环境配置、通用工具技巧）不传 `project` 即存入 `permanent/`。
 
 **状态流转:** `draft` -> `review` -> `permanent` (可降级为 `archived`)
 
@@ -287,7 +289,7 @@ cp -r ~/vault D:/Backup/vault-$(date +%Y%m%d)                # 定时拷贝
 或直接用 iCloud/Dropbox/OneDrive 同步。SQLite 索引可通过 `/kb init` 重建。
 
 ### Q: 保存后搜不到？
-检查 `~/vault/` 下 .md 文件是否存在。若索引异常：`rm ~/vault/.vault.db` 后重新 `/kb init`（不影响已有笔记）。
+检查 `~/vault/` 下 .md 文件是否存在。若索引异常：`rm ~/.vault-mcp/vault.db` 后重新 `/kb init`（不影响已有笔记）。
 
 ### Q: 中文搜索效果如何提升？
 用关键词组合而非完整句子（如 `"Windows 编码 乱码"` 优于长句）。标题精确匹配不受分词影响。善用 `--tag` 过滤。
