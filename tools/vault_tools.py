@@ -90,6 +90,14 @@ def _type_to_subdir(note_type: str) -> str:
     return _TYPE_TO_SUBDIR.get(note_type, "")
 
 
+def _detect_project(vault_dir: Path) -> str | None:
+    """从 CWD 自动检测项目名：CWD 目录名匹配 ~/vault 下已有项目目录时返回。"""
+    cwd_name = Path.cwd().name
+    if (vault_dir / cwd_name).is_dir():
+        return cwd_name
+    return None
+
+
 def _resolve_file_path(
     vault_dir: Path, title: str, note_type: str, project: str | None = None
 ) -> Path:
@@ -326,9 +334,12 @@ async def handle_save(args: dict) -> list[TextContent]:
     content = args["content"]
     tags = args["tags"]
     note_type = args["type"]
-    project = args.get("project")
-    status = args.get("status", "draft")
     vault_dir = get_vault_dir(args)
+    project = args.get("project")
+    # project 未传时自动从 CWD 检测；显式传 None/"" 则强制不进项目
+    if "project" not in args:
+        project = _detect_project(vault_dir)
+    status = args.get("status", "draft")
 
     # 1. 确定文件路径，确保目录存在
     file_path = _resolve_file_path(vault_dir, title, note_type, project)
