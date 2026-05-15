@@ -108,10 +108,15 @@ class TestE2EFullFlow(unittest.TestCase):
 
         cls._shared_db = _SharedVaultDB.create_shared(cls.db_path)
 
-        cls._vaultdb_patch = patch(
-            "tools.vault_tools.VaultDB",
-            lambda: cls._shared_db,
-        )
+        _tool_modules = [
+            "tools.vault_init", "tools.vault_save", "tools.vault_search",
+            "tools.vault_resume", "tools.vault_list", "tools.vault_stats",
+            "tools.vault_orphan", "tools.vault_update", "tools.vault_tags",
+            "tools.vault_log",
+        ]
+        cls._vaultdb_patches = [
+            patch(f"{mod}.VaultDB", lambda: cls._shared_db) for mod in _tool_modules
+        ]
         cls._vaultdb_gt_patch = patch(
             "tools.graphify_tools.VaultDB",
             lambda: cls._shared_db,
@@ -120,13 +125,15 @@ class TestE2EFullFlow(unittest.TestCase):
             "tools._shared.DEFAULT_VAULT_DIR",
             cls.tmpdir,
         )
-        cls._vaultdb_patch.start()
+        for p in cls._vaultdb_patches:
+            p.start()
         cls._vaultdb_gt_patch.start()
         cls._vaultdir_patch.start()
 
     @classmethod
     def tearDownClass(cls):
-        cls._vaultdb_patch.stop()
+        for p in cls._vaultdb_patches:
+            p.stop()
         cls._vaultdb_gt_patch.stop()
         cls._vaultdir_patch.stop()
 

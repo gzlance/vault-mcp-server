@@ -139,23 +139,30 @@ class TestVaultTools(unittest.TestCase):
         cls._shared_db = _SharedVaultDB.create_shared(cls.db_path)
 
         # 补丁 1：将所有 handler 内部创建的 VaultDB 指向共享实例
-        cls._vaultdb_patch = patch(
-            "tools.vault_tools.VaultDB",
-            lambda: cls._shared_db,
-        )
+        _tool_modules = [
+            "tools.vault_init", "tools.vault_save", "tools.vault_search",
+            "tools.vault_resume", "tools.vault_list", "tools.vault_stats",
+            "tools.vault_orphan", "tools.vault_update", "tools.vault_tags",
+            "tools.vault_log",
+        ]
+        cls._vaultdb_patches = [
+            patch(f"{mod}.VaultDB", lambda: cls._shared_db) for mod in _tool_modules
+        ]
         # 补丁 2：将默认 vault 目录重定向到临时目录
         # DEFAULT_VAULT_DIR 已移至 tools._shared，get_vault_dir() 从其定义模块读取
         cls._vaultdir_patch = patch(
             "tools._shared.DEFAULT_VAULT_DIR",
             cls.vault_dir,
         )
-        cls._vaultdb_patch.start()
+        for p in cls._vaultdb_patches:
+            p.start()
         cls._vaultdir_patch.start()
 
     @classmethod
     def tearDownClass(cls):
         """测试类级别清理：停止补丁，关闭连接，删除临时目录。"""
-        cls._vaultdb_patch.stop()
+        for p in cls._vaultdb_patches:
+            p.stop()
         cls._vaultdir_patch.stop()
 
         if cls._shared_db:
@@ -354,24 +361,6 @@ class TestVaultTools(unittest.TestCase):
         self.assertIn("logs", data["file_path"])
         saved_path = self.vault_dir / data["file_path"]
         self.assertTrue(saved_path.is_file())
-
-    def test_save_with_custom_status(self):
-        """正常路径：保存笔记时指定自定义状态（review）。"""
-        self._run(handle_init({}))
-
-        result = self._run(handle_save({
-            "title": "Status测试",
-            "content": "内容",
-            "tags": ["test"],
-            "type": "permanent",
-            "status": "review",
-        }))
-        data = self._parse(result)
-
-        self.assertEqual(data["status"], "ok")
-        # 直接查询数据库验证状态字段
-        note = self._shared_db.get_note_by_path(data["file_path"])
-        self.assertEqual(note["status"], "review")
 
     def test_save_auto_wikilink(self):
         """正常路径：正文中出现已知标题的纯文本时自动转为 [[wikilink]]。"""
@@ -649,10 +638,10 @@ class TestVaultTools(unittest.TestCase):
         self.assertLessEqual(len(data["recent_logs"]), 2)
 
     def test_resume_missing_project(self):
-        """错误路径：缺少 project 字段返回 error 状态。"""
+        """v2.0: project 改为可选（CWD 推断），不传 project 返回空数据而非错误。"""
         result = self._run(handle_resume({}))
         data = self._parse(result)
-        self.assertEqual(data["status"], "error")
+        self.assertEqual(data["status"], "ok")
 
     # ═══════════════════════════════════════════════════════════════
     # 5. handle_list 测试
@@ -735,31 +724,6 @@ class TestVaultTools(unittest.TestCase):
         self.assertGreaterEqual(data["count"], 1)
         for note in data["notes"]:
             self.assertEqual(note["project"], "alpha")
-
-    def test_list_filter_by_status(self):
-        """正常路径：按状态筛选笔记。"""
-        self._run(handle_init({}))
-        self._run(handle_save({
-            "title": "草稿笔记",
-            "content": "内容",
-            "tags": ["t"],
-            "type": "permanent",
-            "status": "draft",
-        }))
-        self._run(handle_save({
-            "title": "归档笔记",
-            "content": "内容",
-            "tags": ["t"],
-            "type": "permanent",
-            "status": "archived",
-        }))
-
-        result = self._run(handle_list({"status": "archived"}))
-        data = self._parse(result)
-
-        self.assertEqual(data["status"], "ok")
-        for note in data["notes"]:
-            self.assertEqual(note["status"], "archived")
 
     def test_list_empty_vault(self):
         """边界路径：空 vault 返回空列表。"""

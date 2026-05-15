@@ -5,7 +5,7 @@
 set -euo pipefail
 
 INSTALL_DIR="${HOME}/scripts/vault-mcp-server"
-SKILL_DIR="${HOME}/.claude/skills/kb"
+SKILLS_DIR="${HOME}/.claude/skills"
 MCP_CONFIG="${HOME}/.claude.json"
 SKIP_TESTS=false
 
@@ -13,7 +13,7 @@ SKIP_TESTS=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --install-dir) INSTALL_DIR="$2"; shift 2 ;;
-        --skill-dir)   SKILL_DIR="$2"; shift 2 ;;
+        --skill-dir)   SKILLS_DIR="$2"; shift 2 ;;
         --mcp-config)  MCP_CONFIG="$2"; shift 2 ;;
         --skip-tests)  SKIP_TESTS=true; shift ;;
         --help)
@@ -21,7 +21,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "选项:"
             echo "  --install-dir DIR   安装目录 (默认: ~/scripts/vault-mcp-server)"
-            echo "  --skill-dir DIR     Skill 目录 (默认: ~/.claude/skills/kb)"
+            echo "  --skill-dir DIR     Skills 目录 (默认: ~/.claude/skills)"
             echo "  --mcp-config FILE   MCP 配置文件 (默认: ~/.claude.json)"
             echo "  --skip-tests        跳过测试"
             echo "  --help              显示帮助"
@@ -85,7 +85,7 @@ cp "$SOURCE_DIR/db.py" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/README.md" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/INSTALL.md" "$INSTALL_DIR/"
-cp "$SOURCE_DIR/SKILL.md" "$INSTALL_DIR/"
+cp -r "$SOURCE_DIR/skills" "$INSTALL_DIR/"
 
 cp "$SOURCE_DIR/tools/"*.py "$INSTALL_DIR/tools/"
 cp "$SOURCE_DIR/tests/"*.py "$INSTALL_DIR/tests/"
@@ -139,12 +139,15 @@ print('  MCP 配置已写入')
 "
 echo -e "${GREEN}  MCP 配置完成${NC}"
 
-# ── 步骤 5: 安装 Skill ──
-echo -e "${YELLOW}[5/6] 安装 /kb Skill...${NC}"
+# ── 步骤 5: 安装 Skills (21 个命令) ──
+echo -e "${YELLOW}[5/6] 安装 /kb 命令集 (21 skills)...${NC}"
 
-mkdir -p "$SKILL_DIR"
-cp "$INSTALL_DIR/SKILL.md" "$SKILL_DIR/SKILL.md"
-echo -e "${GREEN}  Skill 已安装到 $SKILL_DIR/SKILL.md${NC}"
+for skill_dir in "$INSTALL_DIR/skills/"*; do
+    skill_name=$(basename "$skill_dir")
+    mkdir -p "$SKILLS_DIR/$skill_name"
+    cp "$skill_dir/SKILL.md" "$SKILLS_DIR/$skill_name/SKILL.md"
+done
+echo -e "${GREEN}  21 个 Skills 已安装到 $SKILLS_DIR/${NC}"
 
 # ── 步骤 6: 验证 ──
 echo -e "${YELLOW}[6/6] 验证安装...${NC}"
@@ -152,7 +155,10 @@ echo -e "${YELLOW}[6/6] 验证安装...${NC}"
 export PYTHONIOENCODING=utf-8
 if "$PYTHON_CMD" -c "
 from db import VaultDB
-from tools.vault_tools import handle_init, handle_save, handle_search
+from tools.vault_save import handle_save
+from tools.vault_search import handle_search
+from tools.vault_delete import handle_delete
+from tools.vault_todo_list import handle_todo_list
 from tools.graphify_tools import handle_graphify_status
 print('所有模块导入成功')
 " 2>&1; then
@@ -185,5 +191,5 @@ echo ""
 echo -e "已安装位置:"
 echo -e "  服务端: ${INSTALL_DIR}"
 echo -e "  MCP 配置: ${MCP_CONFIG}"
-echo -e "  Skill: ${SKILL_DIR}/SKILL.md"
+echo -e "  Skills: ${SKILLS_DIR}/ (21 commands)"
 echo ""

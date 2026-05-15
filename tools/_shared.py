@@ -1,6 +1,7 @@
 """Vault MCP Server — 工具模块共享函数。"""
 
 import json
+import os
 from pathlib import Path
 
 from mcp.types import TextContent
@@ -15,6 +16,22 @@ def json_reply(data: dict) -> list[TextContent]:
 def get_vault_dir(args: dict) -> Path:
     vault_dir = args.get("vault_dir")
     return Path(vault_dir).expanduser().resolve() if vault_dir else DEFAULT_VAULT_DIR
+
+
+def get_project(args: dict, vault_dir: Path) -> str | None:
+    """从参数或 CWD 推断项目名。优先取传入 project，否则从 os.getcwd() 目录名推断。
+
+    仅当 ~/vault/<name>/ 目录存在时才返回项目名，否则返回 None。
+    """
+    if "project" in args:
+        project = args["project"]
+        if project:  # 显式传入了非空值，不检查目录存在性
+            return project
+        return None  # 显式传入空字符串
+    cwd_name = Path.cwd().name
+    if (vault_dir / cwd_name).is_dir():
+        return cwd_name
+    return None
 
 
 def check_required(args: dict, *fields: str) -> tuple[bool, list[TextContent] | None]:

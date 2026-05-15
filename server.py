@@ -17,6 +17,12 @@ from tools.graphify_tools import (
     handle_graphify_query,
     handle_graphify_status,
 )
+from tools.vault_delete import handle_delete
+from tools.vault_todo_done import handle_todo_done
+from tools.vault_todo_delete import handle_todo_delete
+from tools.vault_todo_list import handle_todo_list
+from tools.vault_todo_pending import handle_todo_pending
+from tools.vault_todo_progress import handle_todo_progress
 from tools.vault_tools import (
     handle_init,
     handle_list,
@@ -87,11 +93,6 @@ async def list_tools() -> list[Tool]:
                         "description": "笔记类型",
                     },
                     "project": {"type": "string", "description": "归属项目名"},
-                    "status": {
-                        "type": "string",
-                        "enum": ["draft", "permanent", "review", "archived"],
-                        "default": "draft",
-                    },
                     "vault_dir": {
                         "type": "string",
                         "description": "Vault 根目录路径，默认 ~/vault",
@@ -146,7 +147,6 @@ async def list_tools() -> list[Tool]:
                     "tags": {"type": "array", "items": {"type": "string"}},
                     "project": {"type": "string"},
                     "type": {"type": "string"},
-                    "status": {"type": "string"},
                     "sort": {"type": "string", "enum": ["created", "updated", "title"]},
                     "limit": {"type": "integer", "default": 20},
                     "offset": {"type": "integer", "default": 0},
@@ -269,6 +269,18 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             return await _handle_tags(arguments)
         elif name == "vault_log":
             return await _handle_log(arguments)
+        elif name == "vault_todo_list":
+            return await _handle_todo_list(arguments)
+        elif name == "vault_todo_done":
+            return await _handle_todo_done(arguments)
+        elif name == "vault_todo_progress":
+            return await _handle_todo_progress(arguments)
+        elif name == "vault_todo_pending":
+            return await _handle_todo_pending(arguments)
+        elif name == "vault_todo_delete":
+            return await _handle_todo_delete(arguments)
+        elif name == "vault_delete":
+            return await _handle_delete(arguments)
         elif name == "graphify_build":
             return await _handle_graphify_build(arguments)
         elif name == "graphify_status":
@@ -297,6 +309,12 @@ _handle_orphan = handle_orphan
 _handle_update = handle_update
 _handle_tags = handle_tags
 _handle_log = handle_log
+_handle_delete = handle_delete
+_handle_todo_list = handle_todo_list
+_handle_todo_done = handle_todo_done
+_handle_todo_progress = handle_todo_progress
+_handle_todo_pending = handle_todo_pending
+_handle_todo_delete = handle_todo_delete
 _handle_graphify_build = handle_graphify_build
 _handle_graphify_status = handle_graphify_status
 _handle_graphify_query = handle_graphify_query

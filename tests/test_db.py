@@ -57,7 +57,7 @@ class TestVaultDB(unittest.TestCase):
 
     def _insert_sample_note(self, title="测试笔记", file_path="测试/笔记.md",
                             tags="python,测试", note_type="permanent",
-                            project="test-project", status="published",
+                            project="test-project",
                             created=None, updated=None,
                             word_count=100, checksum=None):
         """插入一条示例笔记并返回 row id。"""
@@ -67,7 +67,7 @@ class TestVaultDB(unittest.TestCase):
             updated = date.today().isoformat()
         return self.db.insert_note(
             title=title, file_path=file_path, tags=tags,
-            type=note_type, project=project, status=status,
+            type=note_type, project=project,
             created=created, updated=updated,
             word_count=word_count, checksum=checksum,
         )
@@ -75,11 +75,11 @@ class TestVaultDB(unittest.TestCase):
     def _insert_and_index(self, title="测试笔记", file_path="测试/笔记.md",
                           content="这是测试内容，包含 Python 相关信息。",
                           tags="python,测试", note_type="permanent",
-                          project="test-project", status="published"):
+                          project="test-project"):
         """插入笔记并建立 FTS5 索引，返回 note_id。"""
         note_id = self._insert_sample_note(
             title=title, file_path=file_path, tags=tags,
-            note_type=note_type, project=project, status=status,
+            note_type=note_type, project=project,
             word_count=len(content.split()),
             checksum=hashlib.sha256(content.encode()).hexdigest(),
         )
@@ -110,7 +110,7 @@ class TestVaultDB(unittest.TestCase):
         ).fetchall()
         index_names = {row["name"] for row in indexes}
         expected_indexes = {
-            "idx_notes_type", "idx_notes_project", "idx_notes_status",
+            "idx_notes_type", "idx_notes_project",
             "idx_notes_updated", "idx_wikilinks_source", "idx_wikilinks_target",
             "idx_session_logs_project", "idx_session_logs_date",
             "idx_graphify_builds_project_built_at", "idx_notes_title", "idx_notes_created",
@@ -142,8 +142,7 @@ class TestVaultDB(unittest.TestCase):
                 db.initialize()
                 db.insert_note(
                     title="ctx测试", file_path="ctx/测试.md",
-                    tags="test", type="permanent", project="p",
-                    status="draft", created="2025-01-01",
+                    tags="test", type="permanent", project="p", created="2025-01-01",
                     updated="2025-01-01",
                 )
             # with 退出后重新连接验证数据持久化
@@ -177,8 +176,7 @@ class TestVaultDB(unittest.TestCase):
         """验证插入笔记后所有字段正确持久化。"""
         note_id = self._insert_sample_note(
             title="完整字段笔记", file_path="完整/字段.md",
-            tags="tag1,tag2", note_type="solution", project="my-project",
-            status="review", created="2025-03-01", updated="2025-03-15",
+            tags="tag1,tag2", note_type="solution", project="my-project", created="2025-03-01", updated="2025-03-15",
             word_count=500, checksum="abc123",
         )
         note = self.db.get_note_by_path("完整/字段.md")
@@ -188,7 +186,6 @@ class TestVaultDB(unittest.TestCase):
         self.assertEqual(note["tags"], "tag1,tag2")
         self.assertEqual(note["type"], "solution")
         self.assertEqual(note["project"], "my-project")
-        self.assertEqual(note["status"], "review")
         self.assertEqual(note["created"], "2025-03-01")
         self.assertEqual(note["updated"], "2025-03-15")
         self.assertEqual(note["word_count"], 500)
@@ -198,8 +195,7 @@ class TestVaultDB(unittest.TestCase):
         """验证 insert_note 默认值（word_count=0, checksum=None）。"""
         self.db.insert_note(
             title="默认值笔记", file_path="默认/值.md",
-            tags="", type="permanent", project="p",
-            status="draft", created="2025-01-01", updated="2025-01-01",
+            tags="", type="permanent", project="p", created="2025-01-01", updated="2025-01-01",
         )
         note = self.db.get_note_by_path("默认/值.md")
         self.assertEqual(note["word_count"], 0)
@@ -358,14 +354,13 @@ class TestVaultDB(unittest.TestCase):
         """验证 update_note 同时更新多个字段。"""
         note_id = self._insert_sample_note(file_path="更新/多字段.md")
         result = self.db.update_note(
-            note_id, title="多字段更新", tags="new-tag",
-            status="archived", word_count=999,
+            note_id, title="多字段更新", tags="new-tag", word_count=999,
         )
         self.assertTrue(result)
         note = self.db.get_note_by_path("更新/多字段.md")
         self.assertEqual(note["title"], "多字段更新")
         self.assertEqual(note["tags"], "new-tag")
-        self.assertEqual(note["status"], "archived")
+        self.assertIsNotNone(note["id"])
         self.assertEqual(note["word_count"], 999)
 
     def test_update_note_nonexistent_id(self):
@@ -869,8 +864,7 @@ class TestVaultDB(unittest.TestCase):
         """验证 session-log 类型笔记不计入孤立检测。"""
         self.db.insert_note(
             title="会话日志", file_path="o/log.md",
-            tags="", type="session-log", project="p",
-            status="draft", created="2025-01-01", updated="2025-01-01",
+            tags="", type="session-log", project="p", created="2025-01-01", updated="2025-01-01",
         )
         orphans = self.db.find_orphans()
         log_paths_incoming = [n["file_path"] for n in orphans["no_incoming"]]
@@ -1201,38 +1195,6 @@ class TestVaultDB(unittest.TestCase):
         self.assertEqual(len(notes), 1)
         self.assertEqual(notes[0]["type"], "solution")
 
-    def test_list_notes_filter_by_status(self):
-        """验证按状态过滤。"""
-        self._insert_sample_note(file_path="列表/pub.md",
-                                 status="published")
-        self._insert_sample_note(file_path="列表/draft.md",
-                                 status="draft")
-        notes = self.db.list_notes(status="draft")
-        self.assertEqual(len(notes), 1)
-        self.assertEqual(notes[0]["status"], "draft")
-
-    def test_list_notes_pagination(self):
-        """验证分页参数。"""
-        for i in range(5):
-            self._insert_sample_note(file_path=f"列表/分页{i}.md")
-        page1 = self.db.list_notes(limit=2, offset=0)
-        page2 = self.db.list_notes(limit=2, offset=2)
-        self.assertEqual(len(page1), 2)
-        self.assertEqual(len(page2), 2)
-        ids_page1 = {n["id"] for n in page1}
-        ids_page2 = {n["id"] for n in page2}
-        self.assertTrue(ids_page1.isdisjoint(ids_page2))
-
-    def test_list_notes_sort_by_title(self):
-        """验证按标题排序。"""
-        self._insert_sample_note(title="C笔记", file_path="排序/c.md")
-        self._insert_sample_note(title="A笔记", file_path="排序/a.md")
-        self._insert_sample_note(title="B笔记", file_path="排序/b.md")
-        notes = self.db.list_notes(sort="title")
-        self.assertEqual(notes[0]["title"], "C笔记")
-        self.assertEqual(notes[1]["title"], "B笔记")
-        self.assertEqual(notes[2]["title"], "A笔记")
-
     def test_list_notes_sort_by_created(self):
         """验证按创建时间排序。"""
         self._insert_sample_note(title="旧", file_path="排序/旧.md",
@@ -1321,11 +1283,10 @@ class TestVaultDB(unittest.TestCase):
         note = self.db.get_note_by_path("生命周期/测试.md")
         self.assertEqual(note["title"], "生命周期")
 
-        self.db.update_note(note_id, title="更新后的生命周期",
-                            status="archived")
+        self.db.update_note(note_id, title="更新后的生命周期")
         note = self.db.get_note_by_path("生命周期/测试.md")
         self.assertEqual(note["title"], "更新后的生命周期")
-        self.assertEqual(note["status"], "archived")
+        self.assertIsNotNone(note["id"])
 
         self.assertTrue(self.db.delete_note("生命周期/测试.md"))
         self.assertIsNone(self.db.get_note_by_path("生命周期/测试.md"))

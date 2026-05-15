@@ -4,7 +4,7 @@
 
 param(
     [string]$InstallDir = "$env:USERPROFILE\scripts\vault-mcp-server",
-    [string]$SkillDir = "$env:USERPROFILE\.claude\skills\kb",
+    [string]$SkillsDir = "$env:USERPROFILE\.claude\skills",
     [string]$McpConfig = "$env:USERPROFILE\.claude.json",
     [switch]$SkipTests = $false
 )
@@ -58,7 +58,7 @@ Copy-Item -Force "$SourceDir\db.py" $InstallDir
 Copy-Item -Force "$SourceDir\requirements.txt" $InstallDir
 Copy-Item -Force "$SourceDir\README.md" $InstallDir
 Copy-Item -Force "$SourceDir\INSTALL.md" $InstallDir
-Copy-Item -Force "$SourceDir\SKILL.md" $InstallDir
+Copy-Item -Recurse -Force "$SourceDir\skills" "$InstallDir\skills"
 
 Copy-Item -Force "$SourceDir\tools\*.py" "$InstallDir\tools\"
 Copy-Item -Force "$SourceDir\tests\*.py" "$InstallDir\tests\"
@@ -111,15 +111,18 @@ $mcp.mcpServers | Add-Member -NotePropertyName "vault" -NotePropertyValue $vault
 $mcp | ConvertTo-Json -Depth 4 | Set-Content $McpConfig -Encoding UTF8
 Write-Host "  MCP 配置已写入" -ForegroundColor Green
 
-# ── 步骤 5: 安装 Skill ──
-Write-Host "[5/6] 安装 /kb Skill..." -ForegroundColor Yellow
+# ── 步骤 5: 安装 Skills (21 个命令) ──
+Write-Host "[5/6] 安装 /kb 命令集 (21 skills)..." -ForegroundColor Yellow
 
-if (-not (Test-Path $SkillDir)) {
-    New-Item -ItemType Directory -Force -Path $SkillDir | Out-Null
+Get-ChildItem "$InstallDir\skills" -Directory | ForEach-Object {
+    $skillName = $_.Name
+    $targetDir = Join-Path $SkillsDir $skillName
+    if (-not (Test-Path $targetDir)) {
+        New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+    }
+    Copy-Item -Force "$_\SKILL.md" "$targetDir\SKILL.md"
 }
-
-Copy-Item -Force "$InstallDir\SKILL.md" "$SkillDir\SKILL.md"
-Write-Host "  Skill 已安装到 $SkillDir\SKILL.md" -ForegroundColor Green
+Write-Host "  21 个 Skills 已安装到 $SkillsDir\" -ForegroundColor Green
 
 # ── 步骤 6: 验证 ──
 Write-Host "[6/6] 验证安装..." -ForegroundColor Yellow
@@ -170,5 +173,5 @@ Write-Host ""
 Write-Host "已安装位置:" -ForegroundColor White
 Write-Host "  服务端: $InstallDir" -ForegroundColor White
 Write-Host "  MCP 配置: $McpConfig" -ForegroundColor White
-Write-Host "  Skill: $SkillDir\SKILL.md" -ForegroundColor White
+Write-Host "  Skills: $SkillsDir\ (21 commands)" -ForegroundColor White
 Write-Host ""
