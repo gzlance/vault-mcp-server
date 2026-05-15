@@ -242,6 +242,65 @@ async def list_tools() -> list[Tool]:
                 "required": ["project", "symbol"],
             },
         ),
+        Tool(
+            name="vault_delete",
+            description="按标题删除笔记，级联清理 .md 文件 + FTS5 索引 + wikilink 引用 + 标签统计。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "笔记标题"},
+                    "project": {"type": "string", "description": "项目名，不传则从 CWD 推断"},
+                },
+                "required": ["title"],
+            },
+        ),
+        Tool(
+            name="vault_todo_list",
+            description="列出项目待办，默认只显示 pending 状态，按创建时间升序。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project": {"type": "string", "description": "项目名，不传则从 CWD 推断"},
+                    "status": {"type": "string", "enum": ["pending", "in-progress", "done"]},
+                },
+            },
+        ),
+        Tool(
+            name="vault_todo_done",
+            description="标记待办为已完成。",
+            inputSchema={
+                "type": "object",
+                "properties": {"id": {"type": "integer", "description": "待办 ID"}},
+                "required": ["id"],
+            },
+        ),
+        Tool(
+            name="vault_todo_progress",
+            description="标记待办为进行中。",
+            inputSchema={
+                "type": "object",
+                "properties": {"id": {"type": "integer", "description": "待办 ID"}},
+                "required": ["id"],
+            },
+        ),
+        Tool(
+            name="vault_todo_pending",
+            description="恢复待办为待处理状态。",
+            inputSchema={
+                "type": "object",
+                "properties": {"id": {"type": "integer", "description": "待办 ID"}},
+                "required": ["id"],
+            },
+        ),
+        Tool(
+            name="vault_todo_delete",
+            description="删除待办记录。",
+            inputSchema={
+                "type": "object",
+                "properties": {"id": {"type": "integer", "description": "待办 ID"}},
+                "required": ["id"],
+            },
+        ),
     ]
 
 
