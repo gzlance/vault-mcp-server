@@ -101,6 +101,13 @@ async def handle_save(args: dict) -> list[TextContent]:
     vault_dir = get_vault_dir(args)
     project = get_project(args, vault_dir)
 
+    # kb-save 未传 project 且 CWD 无匹配项目目录时，提示初始化
+    if "project" not in args and project is None:
+        return json_reply({
+            "status": "error",
+            "message": "未找到当前项目目录，请先 /kb-init 初始化知识库",
+        })
+
     file_path = _resolve_file_path(vault_dir, title, note_type, project)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     rel_path = str(file_path.relative_to(vault_dir)).replace("\\", "/")
