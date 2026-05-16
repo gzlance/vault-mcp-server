@@ -50,18 +50,17 @@ if (Test-Path $InstallDir) {
     Remove-Item -Recurse -Force $InstallDir
 }
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-New-Item -ItemType Directory -Force -Path "$InstallDir\tools" | Out-Null
-New-Item -ItemType Directory -Force -Path "$InstallDir\tests" | Out-Null
 
 Copy-Item -Force "$SourceDir\server.py" $InstallDir
-Copy-Item -Force "$SourceDir\db.py" $InstallDir
 Copy-Item -Force "$SourceDir\requirements.txt" $InstallDir
 Copy-Item -Force "$SourceDir\README.md" $InstallDir
 Copy-Item -Force "$SourceDir\INSTALL.md" $InstallDir
 Copy-Item -Recurse -Force "$SourceDir\skills" "$InstallDir\skills"
-
-Copy-Item -Force "$SourceDir\tools\*.py" "$InstallDir\tools\"
-Copy-Item -Force "$SourceDir\tests\*.py" "$InstallDir\tests\"
+Copy-Item -Recurse -Force "$SourceDir\tools" "$InstallDir\tools"
+Copy-Item -Recurse -Force "$SourceDir\tests" "$InstallDir\tests"
+Copy-Item -Recurse -Force "$SourceDir\db" "$InstallDir\db"
+Copy-Item -Recurse -Force "$SourceDir\services" "$InstallDir\services"
+Copy-Item -Recurse -Force "$SourceDir\docs" "$InstallDir\docs"
 
 Write-Host "  文件复制完成" -ForegroundColor Green
 
@@ -120,7 +119,7 @@ Get-ChildItem "$InstallDir\skills" -Directory | ForEach-Object {
     if (-not (Test-Path $targetDir)) {
         New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
     }
-    Copy-Item -Force "$_\SKILL.md" "$targetDir\SKILL.md"
+    Copy-Item -Force (Join-Path $_.FullName "SKILL.md") "$targetDir\SKILL.md"
 }
 Write-Host "  21 个 Skills 已安装到 $SkillsDir\" -ForegroundColor Green
 
@@ -167,8 +166,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "下一步:" -ForegroundColor White
 Write-Host "  1. 完全退出并重启 Claude Code" -ForegroundColor White
-Write-Host "  2. 在 Claude Code 中输入: 初始化知识库" -ForegroundColor White
-Write-Host "  3. 输入: /kb stats 验证服务正常" -ForegroundColor White
+Write-Host "  2. 在 Claude Code 中输入: /kb-init" -ForegroundColor White
+Write-Host "  3. 输入: /kb-stats 验证服务正常" -ForegroundColor White
 Write-Host ""
 Write-Host "已安装位置:" -ForegroundColor White
 Write-Host "  服务端: $InstallDir" -ForegroundColor White
