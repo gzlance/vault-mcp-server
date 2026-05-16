@@ -1,0 +1,207 @@
+{
+  "version": "1.0",
+  "created": "2026-05-15",
+  "project": "vault-mcp-server",
+  "tasks": [
+    {
+      "id": 1,
+      "title": "创建 db/ 包结构，拆出 base.py",
+      "description": "将 db.py 中连接管理、迁移、WAL 配置逻辑抽取到 db/base.py。创建 db/__init__.py 占位。",
+      "status": "pending",
+      "phase": 1,
+      "priority": "high",
+      "dependencies": [],
+      "details": "## 实现要点\n\n1. 创建 `db/` 目录及 `__init__.py`（空，占位）\n2. 从 `db.py` 抽取 `__init__`、`_ensure_connected`、`_migrate` 到 `db/base.py`\n3. `base.py` 提供 `DatabaseConnection` 类\n4. 保持 WAL 模式、Context Manager 接口\n5. 现有 82 个测试全部通过"
+    },
+    {
+      "id": 2,
+      "title": "拆出 db/notes.py",
+      "description": "笔记 CRUD + FTS5 索引逻辑从 db.py 拆出。",
+      "status": "pending",
+      "phase": 1,
+      "priority": "high",
+      "dependencies": [1],
+      "details": "## 实现要点\n\n1. 创建 `db/notes.py`，包含 `NotesRepository` 类\n2. 导出方法：`save`, `get_by_path`, `get_by_id`, `search`, `list`, `reindex`, `get_tags`, `update_tags`\n3. 接收 `DatabaseConnection` 实例作为构造参数\n4. 保持现有签名不变"
+    },
+    {
+      "id": 3,
+      "title": "拆出 db/session.py",
+      "description": "会话日志表操作拆出。",
+      "status": "pending",
+      "phase": 1,
+      "priority": "medium",
+      "dependencies": [1],
+      "details": "## 实现要点\n\n1. 创建 `db/session.py`，包含 `SessionRepository` 类\n2. 导出方法：`insert_session_log`, `get_recent_logs`\n3. 接收 `DatabaseConnection` 实例"
+    },
+    {
+      "id": 4,
+      "title": "拆出 db/graph.py 和 db/wikilinks.py",
+      "description": "图谱构建记录和 wikilink 引用图表操作拆出。",
+      "status": "pending",
+      "phase": 1,
+      "priority": "medium",
+      "dependencies": [1],
+      "details": "## 实现要点\n\n1. 创建 `db/graph.py`，包含 `GraphRepository` 类（graphify_builds 表）\n2. 创建 `db/wikilinks.py`，包含 `WikilinkRepository` 类\n3. wikilinks 导出方法：`update`, `find_orphans`, `get_stats`"
+    },
+    {
+      "id": 5,
+      "title": "实现 db/__init__.py VaultDB 外观类",
+      "description": "提供统一入口，委托到各子模块。新增 todos 表。",
+      "status": "pending",
+      "phase": 1,
+      "priority": "high",
+      "dependencies": [2, 3, 4],
+      "details": "## 实现要点\n\n1. `VaultDB` 外观类组合 `DatabaseConnection` + 各 Repository\n2. 对外接口完全兼容旧 `db.py`：`with VaultDB() as db: ...`\n3. 在 `_migrate` 中新增 `CREATE TABLE IF NOT EXISTS todos` DDL\n4. `todos` 表字段：id, project, content, status, source_log_id, created, updated\n5. 新增 `db/todos.py`：`TodosRepository` 类（mark, list, sync_from_log）\n6. `todos` 导出方法：`mark_status`, `list_by_project`, `sync_from_log`"
+    },
+    {
+      "id": 6,
+      "title": "创建 services/ 业务层",
+      "description": "从 tools 层抽离 wikilink 检测、内容校验、标签统计到独立服务模块。",
+      "status": "pending",
+      "phase": 2,
+      "priority": "high",
+      "dependencies": [5],
+      "details": "## 实现要点\n\n1. 创建 `services/wikilink.py`：`detect_wikilinks(content, known_titles)` → list[dict]\n2. 创建 `services/validator.py`：`validate_frontmatter(metadata)` → list[error]\n3. 创建 `services/tags.py`：`normalize_tags(tags)` → list[str]\n4. 纯函数，无副作用，无数据库依赖\n5. tools 层调用 services 而非直接处理"
+    },
+    {
+      "id": 7,
+      "title": "实现 tools/vault_todo.py",
+      "description": "新增待办管理工具：vault_todo_mark 和 vault_todo_list。",
+      "status": "pending",
+      "phase": 2,
+      "priority": "high",
+      "dependencies": [5],
+      "details": "## 实现要点\n\n1. `vault_todo_mark(id, status)` — 标记待办状态（pending/in-progress/done）\n2. `vault_todo_list(project)` — 列出项目待办，支持 status 过滤\n3. 输入校验：status 必须是有效值\n4. 响应包含待办 ID、内容、状态、来源日志"
+    },
+    {
+      "id": 8,
+      "title": "实现 tools/vault_delete.py",
+      "description": "新增笔记删除工具，含级联清理。",
+      "status": "pending",
+      "phase": 2,
+      "priority": "high",
+      "dependencies": [5],
+      "details": "## 实现要点\n\n1. `vault_delete(note_path)` — 按路径删除笔记\n2. 级联操作：删除 .md 文件 → notes 表 → FTS5 → wikilinks → tag_index 更新\n3. 删除前校验 note_path 在 vault_dir 内（防止路径遍历）\n4. 返回被删除笔记的摘要信息\n5. 文件不存在时返回 error（不是 404，是明确错误）"
+    },
+    {
+      "id": 9,
+      "title": "修改 vault_log 同步 todos + vault_resume 新逻辑",
+      "description": "vault_log 写入时将 todos 同步到 todos 表。vault_resume 改为从 todos 表读取未完成待办。",
+      "status": "pending",
+      "phase": 2,
+      "priority": "high",
+      "dependencies": [7],
+      "details": "## 实现要点\n\n1. `vault_log`: 写入 session_log 后，调用 `TodosRepository.sync_from_log(project, log_id, todos)`\n2. sync 策略：相同 content + project 的 pending todo 去重，新增的插入\n3. `vault_resume`: 从 `todos` 表 `WHERE project=? AND status='pending'` 读取\n4. 不再从 `session_logs.todos` JSON 字段读取\n5. 日志 .md 正文中待办 checklist 保持 `[ ] ` 格式（历史快照）"
+    },
+    {
+      "id": 10,
+      "title": "vault_update 追加模式 + 统一错误处理",
+      "description": "vault_update 支持 append_content。实现 @handle_errors 装饰器统一 tools 错误处理。",
+      "status": "pending",
+      "phase": 2,
+      "priority": "medium",
+      "dependencies": [5],
+      "details": "## 实现要点\n\n1. `vault_update(note_path, new_content?, append_content?)` — 至少传一个\n2. 传 new_content：替换正文（保持兼容）\n3. 传 append_content：追加到正文末尾\n4. 同时传：先替换再追加\n5. 更新 FTS5 索引和 checksum\n\n## @handle_errors 装饰器\n\n1. 在 `tools/_shared.py` 中实现\n2. 捕获所有异常，返回 `json_reply({status: 'error', message})`\n3. 为所有 handler 添加装饰器"
+    },
+    {
+      "id": 11,
+      "title": "拆分 tools/vault_tools.py 为独立文件",
+      "description": "每个 MCP 工具独立一个文件，server.py 更新导入和路由。",
+      "status": "pending",
+      "phase": 3,
+      "priority": "high",
+      "dependencies": [9],
+      "details": "## 实现要点\n\n1. 将 vault_tools.py 中每个 handler 拆分为独立文件：\n   - `tools/vault_init.py` → `handle_init`\n   - `tools/vault_save.py` → `handle_save`\n   - `tools/vault_search.py` → `handle_search`\n   - `tools/vault_resume.py` → `handle_resume`\n   - `tools/vault_list.py` → `handle_list`\n   - `tools/vault_stats.py` → `handle_stats`\n   - `tools/vault_orphan.py` → `handle_orphan`\n   - `tools/vault_update.py` → `handle_update`\n   - `tools/vault_tags.py` → `handle_tags`\n   - `tools/vault_log.py` → `handle_log`\n2. 保留 `tools/vault_tools.py` 但变为空壳（re-export）\n3. 每个文件 < 100 行"
+    },
+    {
+      "id": 12,
+      "title": "更新 server.py 工具注册和分发路由",
+      "description": "注册新增工具（todo/delete），更新所有导入路径。",
+      "status": "pending",
+      "phase": 3,
+      "priority": "high",
+      "dependencies": [11],
+      "details": "## 实现要点\n\n1. 导入所有拆分后的 handler\n2. 新增 Tool schema 注册：vault_todo_mark, vault_todo_list, vault_delete\n3. 新增分发路由：`if name == 'vault_todo_mark': return await handle_todo_mark(arguments)`\n4. 更新 vault_update schema（增加 append_content 参数）\n5. 从 13 个工具扩展到 16 个"
+    },
+    {
+      "id": 13,
+      "title": "更新 tests/ 导入路径，验证现有测试通过",
+      "description": "因 db/ 和 tools/ 拆分，更新测试中的导入路径。确保全部 ~140 个现有测试通过。",
+      "status": "pending",
+      "phase": 3,
+      "priority": "high",
+      "dependencies": [12],
+      "details": "## 实现要点\n\n1. 更新 `test_db.py` → `test_db_*.py`，按新模块组织\n2. 更新 `test_vault_tools.py` 中的导入\n3. 更新 `test_graphify_tools.py` 中的导入\n4. `pytest tests/ -v` 全部通过\n5. 覆盖率基线记录"
+    },
+    {
+      "id": 14,
+      "title": "创建独立 KB 命令 SKILL.md 文件",
+      "description": "将单一 /kb 路由 skill 拆分为 /kb-save, /kb-log 等独立 skill file。",
+      "status": "pending",
+      "phase": 4,
+      "priority": "medium",
+      "dependencies": [13],
+      "details": "## 实现要点\n\n1. 在 `~/.claude/skills/` 下创建独立 skill 文件：\n   - `kb-save/SKILL.md`\n   - `kb-log/SKILL.md`\n   - `kb-resume/SKILL.md`\n   - `kb-search/SKILL.md`\n   - `kb-list/SKILL.md`\n   - `kb-stats/SKILL.md`\n   - `kb-tags/SKILL.md`\n   - `kb-todo/SKILL.md`\n   - `kb-delete/SKILL.md`\n   - `kb-update/SKILL.md`\n   - `kb-init/SKILL.md`\n   - `kb-orphan/SKILL.md`\n   - `kb-graph/SKILL.md`\n2. 每个 SKILL.md 极薄（< 20 行），仅做参数提取 + MCP 工具调用\n3. 保留 `/kb` SKILL.md，更新为帮助面板（列出所有子命令 + 一句话描述）"
+    },
+    {
+      "id": 15,
+      "title": "更新 CLAUDE.md 和项目文档",
+      "description": "同步更新项目文档反映 v2.0 变化。",
+      "status": "pending",
+      "phase": 4,
+      "priority": "medium",
+      "dependencies": [14],
+      "details": "## 实现要点\n\n1. 更新 CLAUDE.md：新架构图、16 个 MCP 工具列表、新命令名\n2. 更新关键文件索引表\n3. 如有 USER_GUIDE.md 一并更新"
+    },
+    {
+      "id": 16,
+      "title": "补全 db/ 层测试",
+      "description": "为拆分的 db 模块编写独立单元测试。",
+      "status": "pending",
+      "phase": 5,
+      "priority": "medium",
+      "dependencies": [5],
+      "details": "## 实现要点\n\n1. `tests/test_db_base.py` — 连接管理、迁移测试\n2. `tests/test_db_notes.py` — 笔记 CRUD + FTS5 搜索测试（从旧 test_db.py 迁移）\n3. `tests/test_db_todos.py` — todos 增删改查 + 状态流转测试\n4. `tests/test_db_session.py` — 日志读写测试\n5. 使用 `_SharedVaultDB` 避免 Windows 文件锁"
+    },
+    {
+      "id": 17,
+      "title": "补全 services/ 层测试",
+      "description": "为 services 模块编写纯函数单元测试。",
+      "status": "pending",
+      "phase": 5,
+      "priority": "medium",
+      "dependencies": [6],
+      "details": "## 实现要点\n\n1. `tests/test_services_wikilink.py` — wikilink 检测准确性测试（中英文标题、边界情况）\n2. `tests/test_services_validator.py` — frontmatter 校验（必填字段、类型检查、标签格式）\n3. `tests/test_services_tags.py` — 标签标准化测试\n4. 纯函数测试，无需数据库，mock free"
+    },
+    {
+      "id": 18,
+      "title": "补全 tools/ 层新增工具测试",
+      "description": "为 vault_todo 和 vault_delete 编写测试。",
+      "status": "pending",
+      "phase": 5,
+      "priority": "high",
+      "dependencies": [7, 8],
+      "details": "## 实现要点\n\n1. `tests/test_vault_todo.py` — mark/list 正常流程 + 非法 status + 空列表\n2. `tests/test_vault_delete.py` — 删除存在/不存在笔记 + 级联清理验证 + 路径遍历防护\n3. `tests/test_vault_update.py` — append 模式 + replace 模式 + 同时传"
+    },
+    {
+      "id": 19,
+      "title": "扩展现有工具测试覆盖到 80%",
+      "description": "为现有工具补充边界条件和错误路径测试。",
+      "status": "pending",
+      "phase": 5,
+      "priority": "medium",
+      "dependencies": [12],
+      "details": "## 实现要点\n\n1. 补全 vault_save 边界测试（重复标题、空标签、特殊字符）\n2. 补全 vault_search 边界测试（空查询、FTS5 特殊字符、大结果集）\n3. 补全 vault_resume 边界测试（无日志项目、空项目）\n4. 补全 vault_log 新逻辑测试（todos 同步、去重）\n5. 补全错误路径测试（数据库不可用、文件权限错误）"
+    },
+    {
+      "id": 20,
+      "title": "扩展 E2E 测试 + 配置覆盖率门禁",
+      "description": "E2E 测试覆盖完整新流程。CI 中强制 80% 覆盖率。",
+      "status": "pending",
+      "phase": 5,
+      "priority": "medium",
+      "dependencies": [18, 19],
+      "details": "## 实现要点\n\n1. 扩展 `tests/e2e_test.py` 新增步骤：\n   - vault_log → vault_todo_list → vault_todo_mark → vault_resume（待办完整流转）\n   - vault_save → vault_delete → vault_search 确认已删除（增删流程）\n   - vault_update append → 验证内容正确追加\n2. 在 pytest 配置中添加 `--cov-fail-under=80`\n3. 生成覆盖率报告验证"
+    }
+  ]
+}
