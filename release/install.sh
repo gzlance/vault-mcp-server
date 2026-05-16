@@ -77,18 +77,18 @@ if [ -d "$INSTALL_DIR" ]; then
     echo -e "  目录已存在，覆盖更新..."
     rm -rf "$INSTALL_DIR"
 fi
-mkdir -p "$INSTALL_DIR/tools"
-mkdir -p "$INSTALL_DIR/tests"
+mkdir -p "$INSTALL_DIR"
 
 cp "$SOURCE_DIR/server.py" "$INSTALL_DIR/"
-cp "$SOURCE_DIR/db.py" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/README.md" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/INSTALL.md" "$INSTALL_DIR/"
 cp -r "$SOURCE_DIR/skills" "$INSTALL_DIR/"
-
-cp "$SOURCE_DIR/tools/"*.py "$INSTALL_DIR/tools/"
-cp "$SOURCE_DIR/tests/"*.py "$INSTALL_DIR/tests/"
+cp -r "$SOURCE_DIR/tools" "$INSTALL_DIR/"
+cp -r "$SOURCE_DIR/tests" "$INSTALL_DIR/"
+cp -r "$SOURCE_DIR/db" "$INSTALL_DIR/"
+cp -r "$SOURCE_DIR/services" "$INSTALL_DIR/"
+cp -r "$SOURCE_DIR/docs" "$INSTALL_DIR/"
 
 echo -e "${GREEN}  文件复制完成${NC}"
 
@@ -143,6 +143,7 @@ echo -e "${GREEN}  MCP 配置完成${NC}"
 echo -e "${YELLOW}[5/6] 安装 /kb 命令集 (21 skills)...${NC}"
 
 for skill_dir in "$INSTALL_DIR/skills/"*; do
+    [ -f "$skill_dir/SKILL.md" ] || continue
     skill_name=$(basename "$skill_dir")
     mkdir -p "$SKILLS_DIR/$skill_name"
     cp "$skill_dir/SKILL.md" "$SKILLS_DIR/$skill_name/SKILL.md"
@@ -153,6 +154,7 @@ echo -e "${GREEN}  21 个 Skills 已安装到 $SKILLS_DIR/${NC}"
 echo -e "${YELLOW}[6/6] 验证安装...${NC}"
 
 export PYTHONIOENCODING=utf-8
+cd "$INSTALL_DIR"
 if "$PYTHON_CMD" -c "
 from db import VaultDB
 from tools.vault_save import handle_save
@@ -166,6 +168,7 @@ print('所有模块导入成功')
 else
     echo -e "  警告: 模块导入失败"
 fi
+cd - > /dev/null
 
 # 非跳过模式运行测试
 if [ "$SKIP_TESTS" = false ]; then
@@ -174,7 +177,7 @@ if [ "$SKIP_TESTS" = false ]; then
     "$PYTHON_CMD" -m pip install pytest -q 2>/dev/null || true
     cd "$INSTALL_DIR"
     PYTHONIOENCODING=utf-8 "$PYTHON_CMD" -m pytest tests/ -q 2>&1 || true
-    cd "$OLDPWD"
+    cd - > /dev/null
 fi
 
 # ── 完成 ──
@@ -185,8 +188,8 @@ echo -e "========================================${NC}"
 echo ""
 echo -e "下一步:"
 echo -e "  1. 完全退出并重启 Claude Code"
-echo -e "  2. 在 Claude Code 中输入: 初始化知识库"
-echo -e "  3. 输入: /kb stats 验证服务正常"
+echo -e "  2. 在 Claude Code 中输入: /kb-init"
+echo -e "  3. 输入: /kb-stats 验证服务正常"
 echo ""
 echo -e "已安装位置:"
 echo -e "  服务端: ${INSTALL_DIR}"
