@@ -1,4 +1,4 @@
-# Vault MCP Server — Windows 全自动安装脚本
+﻿# Vault MCP Server — Windows 全自动安装脚本
 # 用法: powershell -ExecutionPolicy Bypass -File install.ps1
 #   或: powershell -ExecutionPolicy Bypass -File install.ps1 -InstallDir "D:\my-vault"
 
@@ -47,7 +47,12 @@ Write-Host "[2/6] 安装文件到 $InstallDir ..." -ForegroundColor Yellow
 
 if (Test-Path $InstallDir) {
     Write-Host "  目录已存在，覆盖更新..." -ForegroundColor DarkYellow
-    Remove-Item -Recurse -Force $InstallDir
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $InstallDir
+    Start-Sleep -Milliseconds 500
+    # 重试一次，处理文件锁
+    if (Test-Path $InstallDir) {
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $InstallDir
+    }
 }
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
@@ -114,18 +119,21 @@ Write-Host "  MCP 配置已写入" -ForegroundColor Green
 Write-Host "[5/6] 安装 /kb 命令集 (21 skills)..." -ForegroundColor Yellow
 
 Get-ChildItem "$InstallDir\skills" -Directory | ForEach-Object {
+    $skillMd = Join-Path $_.FullName "SKILL.md"
+    if (-not (Test-Path $skillMd)) { return }
     $skillName = $_.Name
     $targetDir = Join-Path $SkillsDir $skillName
     if (-not (Test-Path $targetDir)) {
         New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
     }
-    Copy-Item -Force (Join-Path $_.FullName "SKILL.md") "$targetDir\SKILL.md"
+    Copy-Item -Force $skillMd "$targetDir\SKILL.md"
 }
 Write-Host "  21 个 Skills 已安装到 $SkillsDir\" -ForegroundColor Green
 
 # ── 步骤 6: 验证 ──
 Write-Host "[6/6] 验证安装..." -ForegroundColor Yellow
 
+Push-Location $InstallDir
 $env:PYTHONIOENCODING = "utf-8"
 $verifyCode = @"
 from db import VaultDB
@@ -135,7 +143,9 @@ print('所有模块导入成功')
 "@
 
 $result = & python -c $verifyCode 2>&1
-if ($LASTEXITCODE -eq 0) {
+$verifyResult = $LASTEXITCODE
+Pop-Location
+if ($verifyResult -eq 0) {
     Write-Host "  模块导入验证通过" -ForegroundColor Green
 } else {
     Write-Host "  警告: 模块导入失败`n  $result" -ForegroundColor DarkYellow
